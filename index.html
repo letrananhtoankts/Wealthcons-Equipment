@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wealthcons — Chi Phí Thuê Thiết Bị</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --navy: #1B2B4B;
+  --navy-deep: #0F1E35;
+  --navy-mid: #243655;
+  --amber: #F5A623;
+  --amber-light: #FDE8B8;
+  --amber-dark: #C8841A;
+  --teal: #1A9E75;
+  --teal-light: #D4F0E7;
+  --blue: #2E6FD9;
+  --blue-light: #D6E8FF;
+  --red: #D93025;
+  --red-light: #FCE8E6;
+  --orange: #E8720C;
+  --orange-light: #FDE9D5;
+  --gray-50: #F8F9FA;
+  --gray-100: #F1F3F5;
+  --gray-200: #E9ECEF;
+  --gray-300: #DEE2E6;
+  --gray-400: #CED4DA;
+  --gray-500: #ADB5BD;
+  --gray-600: #6C757D;
+  --gray-700: #495057;
+  --gray-800: #343A40;
+  --gray-900: #212529;
+  --white: #FFFFFF;
+  --font: 'Be Vietnam Pro', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  --sidebar-w: 220px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--gray-50);color:var(--gray-900);font-size:14px;line-height:1.5;}
+button{cursor:pointer;font-family:var(--font);}
+input,select,textarea{font-family:var(--font);}
+
+/* === LAYOUT === */
+#app{display:flex;min-height:100vh;}
+
+/* === SIDEBAR === */
+.sidebar{width:var(--sidebar-w);background:var(--navy-deep);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow:hidden;}
+.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px;}
+.sidebar-logo-mark{width:36px;height:36px;background:var(--amber);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--navy-deep);flex-shrink:0;letter-spacing:-.5px;}
+.sidebar-logo-text{color:var(--white);font-size:13px;font-weight:600;line-height:1.2;}
+.sidebar-logo-sub{color:rgba(255,255,255,0.45);font-size:10px;font-weight:400;margin-top:1px;}
+.sidebar-nav{flex:1;padding:12px 8px;overflow-y:auto;}
+.nav-section-label{font-size:9px;font-weight:600;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.1em;padding:8px 8px 4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;color:rgba(255,255,255,0.55);font-size:13px;font-weight:400;transition:all .15s;border:none;background:none;width:100%;text-align:left;margin-bottom:2px;}
+.nav-item:hover{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.85);}
+.nav-item.active{background:rgba(245,166,35,0.15);color:var(--amber);font-weight:500;}
+.nav-item svg{flex-shrink:0;opacity:.8;}
+.nav-item.active svg{opacity:1;}
+.sidebar-bottom{padding:12px 8px;border-top:1px solid rgba(255,255,255,0.08);}
+.user-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius);}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy-deep);}
+.user-info{flex:1;min-width:0;}
+.user-name{font-size:12px;font-weight:500;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-role{font-size:10px;color:rgba(255,255,255,0.35);}
+
+/* === MAIN === */
+.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;}
+.topbar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50;}
+.topbar-left{display:flex;flex-direction:column;}
+.page-title{font-size:15px;font-weight:600;color:var(--gray-900);}
+.page-subtitle{font-size:11px;color:var(--gray-500);}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.sync-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--gray-300);border-radius:var(--radius);background:var(--white);color:var(--gray-700);font-size:12px;font-weight:500;transition:all .15s;}
+.sync-btn:hover{border-color:var(--navy);color:var(--navy);}
+.sync-btn svg{flex-shrink:0;}
+.content{flex:1;padding:20px 24px;}
+
+/* === FILTER BAR === */
+.filter-bar{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;}
+.filter-bar-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
+.filter-group{display:flex;flex-direction:column;gap:5px;}
+.filter-label{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;}
+.pill-group{display:flex;gap:4px;flex-wrap:wrap;}
+.pill-btn{padding:4px 11px;font-size:12px;border-radius:99px;border:1px solid var(--gray-300);background:transparent;color:var(--gray-600);transition:all .12s;white-space:nowrap;font-weight:400;}
+.pill-btn:hover{border-color:var(--gray-500);color:var(--gray-800);}
+.pill-btn.active-year{background:var(--navy);color:var(--white);border-color:var(--navy);font-weight:500;}
+.pill-btn.active-proj{background:var(--navy-mid);color:var(--white);border-color:var(--navy-mid);font-weight:500;}
+.sel{padding:5px 10px;font-size:12px;border:1px solid var(--gray-300);border-radius:var(--radius);background:var(--white);color:var(--gray-700);outline:none;}
+.sel:focus{border-color:var(--navy);box-shadow:0 0 0 2px rgba(27,43,75,0.08);}
+
+/* === KPI CARDS === */
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.kpi-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kpi-card.kpi-actual::before{background:var(--teal);}
+.kpi-card.kpi-budget::before{background:var(--blue);}
+.kpi-card.kpi-bid::before{background:var(--amber);}
+.kpi-label{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.kpi-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.kpi-value-row{display:flex;align-items:baseline;gap:4px;margin-bottom:4px;}
+.kpi-value{font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;}
+.kpi-unit{font-size:12px;color:var(--gray-500);font-weight:400;}
+.kpi-sub{font-size:11px;font-weight:400;}
+.kpi-sub.good{color:var(--teal);}
+.kpi-sub.warn{color:var(--orange);}
+.kpi-sub.bad{color:var(--red);}
+.kpi-sub.neutral{color:var(--gray-500);}
+.kpi-bar-track{height:3px;background:var(--gray-200);border-radius:2px;margin-top:10px;overflow:hidden;}
+.kpi-bar-fill{height:100%;border-radius:2px;transition:width .6s ease;}
+
+/* === CHART GRID === */
+.chart-grid{display:grid;grid-template-columns:1fr 340px;gap:12px;margin-bottom:16px;}
+.chart-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;}
+.chart-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.chart-card-title{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;}
+.legend-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-600);}
+.legend-sq{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.toggle-group{display:flex;border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;}
+.toggle-btn{padding:4px 10px;font-size:11px;border:none;background:transparent;color:var(--gray-500);cursor:pointer;transition:all .12s;font-family:var(--font);}
+.toggle-btn.active{background:var(--gray-100);color:var(--gray-800);font-weight:500;}
+
+/* === TIMELINE CARD === */
+.timeline-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;}
+.tl-proj-tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.tl-tab{padding:3px 10px;font-size:11px;border-radius:99px;border:1px solid var(--gray-300);background:transparent;color:var(--gray-500);cursor:pointer;transition:all .12s;font-family:var(--font);}
+.tl-tab:hover{border-color:var(--teal);color:var(--teal);}
+.tl-tab.active{background:var(--teal);color:var(--white);border-color:var(--teal);}
+
+/* === DETAIL TABLE === */
+.detail-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;}
+.detail-header{padding:12px 16px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;}
+.detail-header-title{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;}
+.row-count{font-size:11px;color:var(--gray-400);}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--gray-50);padding:8px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--gray-200);white-space:nowrap;cursor:pointer;user-select:none;}
+thead th:hover{color:var(--gray-700);}
+thead th.sort-asc::after{content:' ↑';}
+thead th.sort-desc::after{content:' ↓';}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--gray-100);color:var(--gray-800);vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:var(--gray-50);}
+tfoot td{padding:9px 12px;background:var(--gray-50);font-weight:600;border-top:2px solid var(--gray-200);font-size:12px;}
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600;}
+.badge-ok{background:var(--teal-light);color:#0B6E50;}
+.badge-warn{background:var(--orange-light);color:#9A4D08;}
+.badge-bad{background:var(--red-light);color:#9B2219;}
+.num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:11px;}
+
+/* === FORM VIEWS === */
+.form-page{max-width:780px;}
+.form-section{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;}
+.form-section-title{font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:8px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.form-field{display:flex;flex-direction:column;gap:4px;}
+.form-field.span2{grid-column:1/-1;}
+.form-label{font-size:11px;font-weight:500;color:var(--gray-600);}
+.form-label.required::after{content:' *';color:var(--red);}
+.form-input{padding:8px 10px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:var(--font);color:var(--gray-900);background:var(--white);outline:none;transition:border-color .12s;}
+.form-input:focus{border-color:var(--navy);box-shadow:0 0 0 2px rgba(27,43,75,0.07);}
+.form-input::placeholder{color:var(--gray-400);}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
+.btn{padding:8px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;border:none;transition:all .15s;font-family:var(--font);}
+.btn-primary{background:var(--navy);color:var(--white);}
+.btn-primary:hover{background:var(--navy-mid);}
+.btn-secondary{background:var(--white);color:var(--gray-700);border:1px solid var(--gray-300);}
+.btn-secondary:hover{border-color:var(--gray-500);}
+.btn-success{background:var(--teal);color:var(--white);}
+.btn-success:hover{background:#158563;}
+.btn-danger{background:var(--red-light);color:var(--red);}
+.btn-danger:hover{background:#f5c6c3;}
+.btn-sm{padding:5px 12px;font-size:11px;}
+.btn-icon{padding:6px;border-radius:var(--radius);background:transparent;border:1px solid var(--gray-200);color:var(--gray-600);display:flex;align-items:center;justify-content:center;}
+.btn-icon:hover{background:var(--gray-100);}
+
+/* === BILL ENTRY === */
+.bill-row{display:grid;grid-template-columns:1fr 1fr 140px 36px;gap:8px;align-items:end;padding:8px 0;border-bottom:1px solid var(--gray-100);}
+.bill-row:last-child{border-bottom:none;}
+.add-row-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1px dashed var(--gray-300);border-radius:var(--radius);color:var(--gray-500);font-size:12px;width:100%;background:transparent;justify-content:center;transition:all .15s;margin-top:8px;}
+.add-row-btn:hover{border-color:var(--navy);color:var(--navy);background:rgba(27,43,75,0.03);}
+
+/* === DATA LIST VIEWS === */
+.list-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;}
+.list-card-header{padding:12px 16px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;}
+.list-item{display:grid;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-100);transition:background .1s;}
+.list-item:last-child{border-bottom:none;}
+.list-item:hover{background:var(--gray-50);}
+.item-actions{display:flex;gap:6px;}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.status-active{background:var(--teal);}
+.status-inactive{background:var(--gray-400);}
+
+/* === MISC === */
+.empty-state{text-align:center;padding:48px 24px;color:var(--gray-400);}
+.empty-state svg{margin-bottom:12px;opacity:.4;}
+.empty-state p{font-size:13px;}
+.loading{display:flex;align-items:center;justify-content:center;padding:48px;color:var(--gray-400);gap:8px;font-size:13px;}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--gray-900);color:var(--white);padding:10px 16px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;}
+.toast.show{opacity:1;}
+.divider{height:1px;background:var(--gray-100);margin:12px 0;}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:500;background:var(--gray-100);color:var(--gray-600);}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500;}
+.chip-navy{background:rgba(27,43,75,0.1);color:var(--navy);}
+.chip-amber{background:var(--amber-light);color:var(--amber-dark);}
+.chip-teal{background:var(--teal-light);color:#0B6E50;}
+
+/* === RESPONSIVE === */
+@media(max-width:900px){
+  .chart-grid{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:640px){
+  :root{--sidebar-w:0px;}
+  .sidebar{transform:translateX(-100%);}
+  .kpi-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script type="text/babel">
+const {useState, useEffect, useCallback, useRef, useMemo} = React;
+
+// ============================================================
+// CONFIG — đổi SHEET_ID và API_KEY theo Google Sheets của bạn
+// ============================================================
+const CONFIG = {
+  SHEET_ID: 'YOUR_SHEET_ID_HERE',
+  API_KEY:  'YOUR_API_KEY_HERE',
+  SHEET_NAMES: {
+    projects:    'PROJECTS',
+    suppliers:   'SUPPLIERS',
+    categories:  'CATEGORIES',
+    bid:         'BID_COST',
+    budget:      'BUDGET',
+    actual:      'ACTUAL_COST',
+    dashboard:   'DASHBOARD_DATA',
+  }
+};
+
+// ============================================================
+// STATIC LOOKUP MAPS
+// ============================================================
+const PSHORT = {SYCB13:'Sycamore B13',SISCT:'SIS Cần Thơ',THIENHG:'Thiên Hương',SUNHN:'Sun Hà Nam',BAINOMHT:'Bãi Nồm'};
+const CNAMES  = {BAOCHE:'Bao che',CHONGSAN:'Chống sàn',CONGTACTAM:'Công tác tấm',VANCHUYEN:'Vận chuyển',HAOHUT:'Hao hụt',VANTHANGTAI:'Vận thăng tải',CAUTHAP:'Cầu thang'};
+const NNAMES  = {TRUONGTHINH:'Trường Thịnh',VIETWEE:'Vietwee',HDC:'HDC',NGOCPHUC:'Ngọc Phúc',VANLOC:'Vân Lộc',SUNTECH:'Suntech'};
+const COLORS  = ['#1A9E75','#2E6FD9','#F5A623','#D4537E','#7F77DD','#5DCAA5','#D85A30','#E8720C'];
+const YEARS   = ['2023','2024','2025','2026'];
+
+// ============================================================
+// SAMPLE DATA (replace with real Sheets API calls)
+// ============================================================
+const SAMPLE_ACTUAL = [
+  {id:'C001',p:'SYCB13',c:'BAOCHE',   n:'TRUONGTHINH',actual:754005538,  budget:1154896468,bid:1304034147,months:{'01/2024':320000000,'02/2024':220000000,'03/2024':214005538}},
+  {id:'C002',p:'SYCB13',c:'CHONGSAN', n:'TRUONGTHINH',actual:1309896407, budget:3747034094,bid:3822523090,months:{'01/2024':500000000,'02/2024':450000000,'03/2024':359896407}},
+  {id:'C003',p:'SYCB13',c:'CONGTACTAM',n:'NGOCPHUC',  actual:376869138,  budget:564766667, bid:876869138, months:{'01/2024':180000000,'02/2024':196869138}},
+  {id:'C004',p:'SYCB13',c:'HAOHUT',   n:'HDC',        actual:18978770,   budget:170114867, bid:210114867, months:{'02/2024':18978770}},
+  {id:'C005',p:'SYCB13',c:'VANCHUYEN',n:'NGOCPHUC',   actual:262285186,  budget:676500000, bid:1207695890,months:{'02/2024':130000000,'03/2024':132285186}},
+  {id:'C006',p:'SYCB13',c:'VANTHANGTAI',n:'TRUONGTHINH',actual:508393344,budget:508393344, bid:508393344, months:{'03/2024':508393344}},
+  {id:'C007',p:'SISCT', c:'BAOCHE',   n:'TRUONGTHINH',actual:3800000000, budget:4200000000,bid:4800000000,months:{'01/2024':1200000000,'02/2024':1400000000,'03/2024':1200000000}},
+  {id:'C008',p:'SISCT', c:'CHONGSAN', n:'VIETWEE',    actual:2977545295, budget:3300000000,bid:3500000000,months:{'01/2024':900000000,'02/2024':1100000000,'03/2024':977545295}},
+  {id:'C009',p:'SISCT', c:'VANCHUYEN',n:'VANLOC',     actual:610000000,  budget:700000000, bid:750000000, months:{'02/2024':300000000,'03/2024':310000000}},
+  {id:'C010',p:'THIENHG',c:'CAUTHAP', n:'HDC',        actual:395960000,  budget:1283500000,bid:1660000000,months:{'01/2024':395960000}},
+  {id:'C011',p:'THIENHG',c:'BAOCHE',  n:'TRUONGTHINH',actual:5200000000, budget:5800000000,bid:6200000000,months:{'01/2024':1800000000,'02/2024':2000000000,'03/2024':1400000000}},
+  {id:'C012',p:'SUNHN', c:'CHONGSAN', n:'VIETWEE',    actual:1702194573, budget:2100000000,bid:2300000000,months:{'01/2024':600000000,'02/2024':600000000,'03/2024':502194573}},
+  {id:'C013',p:'SUNHN', c:'BAOCHE',   n:'HDC',        actual:319412027,  budget:400000000, bid:450000000, months:{'03/2024':319412027}},
+  {id:'C014',p:'BAINOMHT',c:'BAOCHE', n:'TRUONGTHINH',actual:1811031228, budget:2100000000,bid:2300000000,months:{'01/2024':600000000,'02/2024':700000000,'03/2024':511031228}},
+  {id:'C015',p:'BAINOMHT',c:'CHONGSAN',n:'SUNTECH',   actual:500000000,  budget:600000000, bid:650000000, months:{'02/2024':250000000,'03/2024':250000000}},
+  {id:'C016',p:'SYCB13',c:'BAOCHE',   n:'TRUONGTHINH',actual:620000000,  budget:900000000, bid:1000000000,months:{'06/2023':300000000,'07/2023':320000000}},
+  {id:'C017',p:'THIENHG',c:'CHONGSAN',n:'VIETWEE',    actual:980000000,  budget:1100000000,bid:1200000000,months:{'08/2023':480000000,'09/2023':500000000}},
+  {id:'C018',p:'SISCT', c:'CHONGSAN', n:'VIETWEE',    actual:1500000000, budget:1600000000,bid:1700000000,months:{'01/2025':750000000,'02/2025':750000000}},
+  {id:'C019',p:'BAINOMHT',c:'BAOCHE', n:'TRUONGTHINH',actual:900000000,  budget:1000000000,bid:1100000000,months:{'01/2025':450000000,'02/2025':450000000}},
+];
+
+const SAMPLE_PROJECTS = [
+  {id:'SYCB13',  name:'Sycamore B13',  location:'Hà Nội',   start:'01/2024',end:'12/2025',value:120000000000,status:'Active',pm:'Nguyễn Văn A'},
+  {id:'SISCT',   name:'SIS Cần Thơ',   location:'Cần Thơ',  start:'03/2024',end:'06/2026',value:85000000000, status:'Active',pm:'Trần Văn B'},
+  {id:'THIENHG', name:'Thiên Hương',   location:'TP.HCM',   start:'06/2023',end:'12/2025',value:95000000000, status:'Active',pm:'Lê Văn C'},
+  {id:'SUNHN',   name:'Sun Hà Nam',    location:'Hà Nam',   start:'09/2024',end:'09/2026',value:75000000000, status:'Active',pm:'Phạm Văn D'},
+  {id:'BAINOMHT',name:'Bãi Nồm Hà Tĩnh',location:'Hà Tĩnh',start:'01/2024',end:'06/2026',value:60000000000, status:'Active',pm:'Hoàng Văn E'},
+];
+
+const SAMPLE_SUPPLIERS = [
+  {id:'TRUONGTHINH',name:'Công ty TNHH Trường Thịnh',contact:'Nguyễn Văn X',phone:'0901234567',cats:'BAOCHE,CHONGSAN',status:'Active'},
+  {id:'VIETWEE',    name:'Công ty CP Vietwee',        contact:'Trần Thị Y',  phone:'0912345678',cats:'CHONGSAN,CONGTACTAM',status:'Active'},
+  {id:'HDC',        name:'Công ty TNHH HDC',          contact:'Lê Văn Z',    phone:'0923456789',cats:'BAOCHE,HAOHUT',status:'Active'},
+  {id:'NGOCPHUC',   name:'Công ty CP Ngọc Phúc',      contact:'Phạm Thị W',  phone:'0934567890',cats:'CONGTACTAM,VANCHUYEN',status:'Active'},
+  {id:'VANLOC',     name:'Công ty TNHH Vân Lộc',      contact:'Hoàng Văn V', phone:'0945678901',cats:'VANCHUYEN',status:'Active'},
+  {id:'SUNTECH',    name:'Công ty CP Suntech',         contact:'Đinh Văn U',  phone:'0956789012',cats:'CHONGSAN,CONGTACTAM',status:'Active'},
+];
+
+// ============================================================
+// UTILITIES
+// ============================================================
+const fmt2  = n => (n/1e9).toFixed(2);
+const fmtM  = n => { const b=n/1e9; if(b>=1000) return (b/1000).toFixed(1)+'K tỷ'; return b.toFixed(2)+' tỷ'; };
+const fmtVND= n => new Intl.NumberFormat('vi-VN').format(n)+' ₫';
+const getYear = m => m ? m.split('/')[1] : null;
+
+function showToast(msg, dur=2500){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), dur);
+}
+
+function actualForYear(d, year){
+  if(!year || year==='all') return d.actual;
+  return Object.entries(d.months).filter(([m])=>getYear(m)===year).reduce((s,[,v])=>s+v,0);
+}
+
+// ============================================================
+// GOOGLE SHEETS API
+// ============================================================
+async function sheetsRead(range){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?key=${CONFIG.API_KEY}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Sheets API error: '+res.status);
+  const data = await res.json();
+  return data.values || [];
+}
+
+async function sheetsAppend(sheetName, values){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${sheetName}:append?valueInputOption=USER_ENTERED&key=${CONFIG.API_KEY}`;
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({values})});
+  if(!res.ok) throw new Error('Sheets append error');
+  return res.json();
+}
+
+// ============================================================
+// ICONS
+// ============================================================
+const Icon = ({name, size=16, color='currentColor'}) => {
+  const icons = {
+    dashboard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+    project:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    bid:       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    budget:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+    cost:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>,
+    supplier:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
+    plus:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    refresh:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>,
+    trash:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+    edit:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+    upload:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>,
+    check:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ============================================================
+// CHART COMPONENTS
+// ============================================================
+function BarChartComp({data, selProj}){
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+  useEffect(()=>{
+    const projs = selProj==='all' ? Object.keys(PSHORT) : [selProj];
+    const labels = projs.map(p=>(PSHORT[p]||p).replace('Sycamore ','Syc.').replace(' Hà Nam',' HN').replace('Thiên Hương','T.Hương').replace(' Cần Thơ',' CT'));
+    const actuals = projs.map(p=>+fmt2(data.filter(d=>d.p===p).reduce((s,d)=>s+d._actual,0)));
+    const budgets = projs.map(p=>+fmt2(data.filter(d=>d.p===p).reduce((s,d)=>s+d.budget,0)));
+    const bids    = projs.map(p=>+fmt2(data.filter(d=>d.p===p).reduce((s,d)=>s+d.bid,0)));
+    if(chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(ref.current,{
+      type:'bar',
+      data:{labels,datasets:[
+        {label:'Thực tế',  data:actuals, backgroundColor:'#1A9E75',borderRadius:3,borderSkipped:false},
+        {label:'Dự trù',   data:budgets, backgroundColor:'#2E6FD9',borderRadius:3,borderSkipped:false},
+        {label:'Đấu thầu', data:bids,    backgroundColor:'#F5A623',borderRadius:3,borderSkipped:false},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' tỷ'}}},
+        scales:{x:{ticks:{font:{size:10,family:'Be Vietnam Pro'},autoSkip:false,maxRotation:0},grid:{display:false}},
+                y:{ticks:{font:{size:10},callback:v=>v},grid:{color:'rgba(0,0,0,0.04)'}}}}
+    });
+    return ()=>{if(chartRef.current) chartRef.current.destroy();};
+  },[data, selProj]);
+  return <canvas ref={ref} style={{width:'100%',height:'100%'}}/>;
+}
+
+function PieChartComp({data, mode}){
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+  useEffect(()=>{
+    const grp={};
+    data.forEach(d=>{const k=mode==='hm'?d.c:d.n; if(!grp[k])grp[k]=0; grp[k]+=d._actual;});
+    const keys=Object.keys(grp);
+    const vals=keys.map(k=>+(grp[k]/1e9).toFixed(2));
+    const total=vals.reduce((s,v)=>s+v,0);
+    const nameOf=k=>mode==='hm'?(CNAMES[k]||k):(NNAMES[k]||k);
+    if(chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(ref.current,{
+      type:'doughnut',
+      data:{labels:keys.map(nameOf),datasets:[{data:vals,backgroundColor:COLORS.slice(0,keys.length),borderWidth:2,borderColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+c.parsed.toFixed(2)+' tỷ ('+((c.parsed/total)*100).toFixed(1)+'%)'}}}}
+    });
+    return ()=>{if(chartRef.current) chartRef.current.destroy();};
+  },[data, mode]);
+  return <canvas ref={ref} style={{width:'100%',height:'100%'}}/>;
+}
+
+function LineChartComp({data, tlProj, selYear}){
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+  useEffect(()=>{
+    const src = tlProj==='all' ? data : data.filter(d=>d.p===tlProj);
+    const monthMap={};
+    src.forEach(d=>Object.entries(d.months).forEach(([m,v])=>{
+      if(!selYear||selYear==='all'||getYear(m)===selYear){
+        if(!monthMap[m])monthMap[m]=0; monthMap[m]+=v;
+      }
+    }));
+    const months=Object.keys(monthMap).sort((a,b)=>{
+      const [ma,ya]=a.split('/');const [mb,yb]=b.split('/');
+      return ya!==yb?ya-yb:ma-mb;
+    });
+    const vals=months.map(m=>+(monthMap[m]/1e9).toFixed(2));
+    const cum=[]; let acc=0; vals.forEach(v=>{acc+=v;cum.push(+acc.toFixed(2));});
+    if(chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(ref.current,{
+      type:'line',
+      data:{labels:months,datasets:[
+        {label:'Theo tháng (tỷ)',data:vals,borderColor:'#1A9E75',backgroundColor:'rgba(26,158,117,0.07)',fill:true,tension:0.35,pointRadius:4,pointBackgroundColor:'#1A9E75',borderWidth:2,yAxisID:'y'},
+        {label:'Lũy kế (tỷ)',   data:cum, borderColor:'#2E6FD9',backgroundColor:'transparent',fill:false,tension:0.35,pointRadius:3,pointBackgroundColor:'#2E6FD9',borderWidth:1.5,borderDash:[5,3],yAxisID:'y2'},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',align:'end',labels:{font:{size:10,family:'Be Vietnam Pro'},boxWidth:9,padding:10,usePointStyle:true}},
+          tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' tỷ'}}},
+        scales:{
+          x:{ticks:{font:{size:10},autoSkip:true,maxRotation:30},grid:{display:false}},
+          y:{ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.04)'},title:{display:true,text:'Tháng (tỷ)',font:{size:9},color:'#1A9E75'}},
+          y2:{position:'right',ticks:{font:{size:10}},grid:{display:false},title:{display:true,text:'Lũy kế',font:{size:9},color:'#2E6FD9'}}
+        }}
+    });
+    return ()=>{if(chartRef.current) chartRef.current.destroy();};
+  },[data, tlProj, selYear]);
+  return <canvas ref={ref} style={{width:'100%',height:'100%'}}/>;
+}
+
+// ============================================================
+// DASHBOARD PAGE
+// ============================================================
+function Dashboard(){
+  const [selYear, setSelYear]   = useState('all');
+  const [selProj, setSelProj]   = useState('all');
+  const [selCat,  setSelCat]    = useState('all');
+  const [selNCC,  setSelNCC]    = useState('all');
+  const [pieMode, setPieMode]   = useState('hm');
+  const [tlProj,  setTlProj]    = useState('all');
+  const [sortKey, setSortKey]   = useState('actual');
+  const [sortDir, setSortDir]   = useState(-1);
+
+  const filtered = useMemo(()=>{
+    return SAMPLE_ACTUAL.filter(d=>{
+      if(selProj!=='all'&&d.p!==selProj) return false;
+      if(selCat!=='all'&&d.c!==selCat)   return false;
+      if(selNCC!=='all'&&d.n!==selNCC)   return false;
+      if(selYear!=='all'){
+        return Object.keys(d.months).some(m=>getYear(m)===selYear);
+      }
+      return true;
+    }).map(d=>({...d, _actual: actualForYear(d, selYear)}));
+  },[selYear,selProj,selCat,selNCC]);
+
+  const tA   = filtered.reduce((s,d)=>s+d._actual,0);
+  const tB   = filtered.reduce((s,d)=>s+d.budget,0);
+  const tBid = filtered.reduce((s,d)=>s+d.bid,0);
+  const pctB = tB>0?(tA/tB*100):0;
+  const pctBid = tBid>0?(tA/tBid*100):0;
+
+  // aggregate table rows
+  const tableRows = useMemo(()=>{
+    const byKey={};
+    filtered.forEach(d=>{
+      const k=d.p+'|'+d.c;
+      if(!byKey[k]) byKey[k]={pname:PSHORT[d.p]||d.p,cat:d.c,ncc:d.n,actual:0,budget:d.budget,bid:d.bid};
+      byKey[k].actual+=d._actual;
+    });
+    return Object.values(byKey).sort((a,b)=>{
+      let va=a[sortKey]??'',vb=b[sortKey]??'';
+      if(sortKey==='pct'){va=a.budget>0?a.actual/a.budget:0;vb=b.budget>0?b.actual/b.budget:0;}
+      if(typeof va==='string') return va.localeCompare(vb)*sortDir;
+      return (va-vb)*sortDir;
+    });
+  },[filtered,sortKey,sortDir]);
+
+  const tfoot = {
+    actual: tableRows.reduce((s,r)=>s+r.actual,0),
+    budget: tableRows.reduce((s,r)=>s+r.budget,0),
+    bid:    tableRows.reduce((s,r)=>s+r.bid,0),
+  };
+
+  function doSort(k){
+    if(sortKey===k) setSortDir(d=>d*-1); else {setSortKey(k);setSortDir(-1);}
+  }
+
+  // Pie legend
+  const pieLegend = useMemo(()=>{
+    const grp={};
+    filtered.forEach(d=>{const k=pieMode==='hm'?d.c:d.n;if(!grp[k])grp[k]=0;grp[k]+=d._actual;});
+    const keys=Object.keys(grp);
+    const total=keys.reduce((s,k)=>s+grp[k],0);
+    return keys.map((k,i)=>({key:k,name:pieMode==='hm'?(CNAMES[k]||k):(NNAMES[k]||k),pct:total>0?(grp[k]/total*100).toFixed(0):0,color:COLORS[i%COLORS.length]}));
+  },[filtered,pieMode]);
+
+  const tlProjOptions = selProj==='all' ? ['all',...Object.keys(PSHORT)] : [selProj];
+
+  return (
+    <div>
+      {/* FILTER BAR */}
+      <div className="filter-bar">
+        <div className="filter-bar-row">
+          <div className="filter-group">
+            <div className="filter-label">Năm</div>
+            <div className="pill-group">
+              {['all',...YEARS].map(y=>(
+                <button key={y} className={`pill-btn${selYear===y?' active-year':''}`} onClick={()=>setSelYear(y)}>
+                  {y==='all'?'Tất cả':y}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-group">
+            <div className="filter-label">Công trình</div>
+            <div className="pill-group">
+              {['all',...Object.keys(PSHORT)].map(p=>(
+                <button key={p} className={`pill-btn${selProj===p?' active-proj':''}`} onClick={()=>setSelProj(p)}>
+                  {p==='all'?'Tất cả':(PSHORT[p]||p).replace('Sycamore ','Syc. ').replace(' Hà Nam',' HN').replace('Thiên Hương','T.Hương').replace(' Cần Thơ',' CT')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-group">
+            <div className="filter-label">Hạng mục</div>
+            <select className="sel" value={selCat} onChange={e=>setSelCat(e.target.value)}>
+              <option value="all">Tất cả</option>
+              {Object.entries(CNAMES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div className="filter-group">
+            <div className="filter-label">NCC</div>
+            <select className="sel" value={selNCC} onChange={e=>setSelNCC(e.target.value)}>
+              <option value="all">Tất cả</option>
+              {Object.entries(NNAMES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div className="kpi-grid">
+        <div className="kpi-card kpi-actual">
+          <div className="kpi-label"><span className="kpi-dot" style={{background:'#1A9E75'}}/> Thực tế (chưa VAT)</div>
+          <div className="kpi-value-row"><span className="kpi-value">{fmt2(tA)}</span><span className="kpi-unit">tỷ</span></div>
+          <div className={`kpi-sub ${pctB>100?'bad':pctB>85?'warn':'good'}`}>{pctB.toFixed(1)}% so với dự trù</div>
+          <div className="kpi-bar-track"><div className="kpi-bar-fill" style={{width:Math.min(pctB,100).toFixed(1)+'%',background:'#1A9E75'}}/></div>
+        </div>
+        <div className="kpi-card kpi-budget">
+          <div className="kpi-label"><span className="kpi-dot" style={{background:'#2E6FD9'}}/> Dự trù</div>
+          <div className="kpi-value-row"><span className="kpi-value">{fmt2(tB)}</span><span className="kpi-unit">tỷ</span></div>
+          <div className={`kpi-sub ${(tB-tA)<0?'bad':'neutral'}`}>Còn lại: {fmt2(tB-tA)} tỷ</div>
+          <div className="kpi-bar-track"><div className="kpi-bar-fill" style={{width:'100%',background:'#2E6FD9'}}/></div>
+        </div>
+        <div className="kpi-card kpi-bid">
+          <div className="kpi-label"><span className="kpi-dot" style={{background:'#F5A623'}}/> Đấu thầu</div>
+          <div className="kpi-value-row"><span className="kpi-value">{fmt2(tBid)}</span><span className="kpi-unit">tỷ</span></div>
+          <div className={`kpi-sub ${(tBid-tA)<0?'bad':'good'}`}>Tiết kiệm: {fmt2(tBid-tA)} tỷ</div>
+          <div className="kpi-bar-track"><div className="kpi-bar-fill" style={{width:Math.min(pctBid,100).toFixed(1)+'%',background:'#F5A623'}}/></div>
+        </div>
+      </div>
+
+      {/* BAR + PIE */}
+      <div className="chart-grid">
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <div className="chart-card-title">Thực tế vs Dự trù vs Đấu thầu</div>
+            <div className="legend-row" style={{marginBottom:0}}>
+              {[['#1A9E75','Thực tế'],['#2E6FD9','Dự trù'],['#F5A623','Đấu thầu']].map(([c,l])=>(
+                <span key={l} className="legend-item"><span className="legend-sq" style={{background:c}}/>{l}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{position:'relative',height:200}}><BarChartComp data={filtered} selProj={selProj}/></div>
+        </div>
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <div className="chart-card-title">Cơ cấu chi phí</div>
+            <div className="toggle-group">
+              <button className={`toggle-btn${pieMode==='hm'?' active':''}`} onClick={()=>setPieMode('hm')}>Hạng mục</button>
+              <button className={`toggle-btn${pieMode==='ncc'?' active':''}`} onClick={()=>setPieMode('ncc')}>NCC</button>
+            </div>
+          </div>
+          <div style={{position:'relative',height:160}}><PieChartComp data={filtered} mode={pieMode}/></div>
+          <div className="legend-row" style={{marginTop:8,justifyContent:'center',flexWrap:'wrap',gap:6}}>
+            {pieLegend.map(l=>(
+              <span key={l.key} className="legend-item" style={{fontSize:10}}>
+                <span className="legend-sq" style={{background:l.color}}/>{l.name} {l.pct}%
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* TIMELINE */}
+      <div className="timeline-card">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
+          <div className="chart-card-title">Chi phí thực tế theo tháng</div>
+          <div className="tl-proj-tabs">
+            {tlProjOptions.map(p=>(
+              <button key={p} className={`tl-tab${tlProj===p?' active':''}`} onClick={()=>setTlProj(p)}>
+                {p==='all'?'Tất cả':(PSHORT[p]||p).replace('Sycamore ','Syc. ').replace(' Hà Nam',' HN').replace('Thiên Hương','T.Hg').replace(' Cần Thơ',' CT')}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{position:'relative',height:160}}><LineChartComp data={filtered} tlProj={tlProj} selYear={selYear}/></div>
+      </div>
+
+      {/* DETAIL TABLE */}
+      <div className="detail-card">
+        <div className="detail-header">
+          <div className="detail-header-title">Chi tiết theo công trình &amp; hạng mục</div>
+          <span className="row-count">{tableRows.length} dòng</span>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {[['pname','Công trình'],['cat','Hạng mục'],['ncc','NCC chính'],['actual','Thực tế (tỷ)'],['budget','Dự trù (tỷ)'],['pct','Chênh lệch (%)'],['bid','Đấu thầu (tỷ)']].map(([k,lbl])=>(
+                  <th key={k} className={sortKey===k?(sortDir>0?'sort-asc':'sort-desc'):''} onClick={()=>doSort(k)}
+                    style={{textAlign:['actual','budget','pct','bid'].includes(k)?'right':'left'}}>{lbl}</th>
+                ))}
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((r,i)=>{
+                const pct = r.budget>0?(r.actual/r.budget*100):0;
+                const cl  = r.budget>0?((r.actual-r.budget)/r.budget*100):0;
+                const badgeCls = pct<80?'badge-ok':pct<100?'badge-warn':'badge-bad';
+                const badgeLbl = pct<80?'Tốt':pct<100?'Chú ý':'Vượt';
+                const clColor  = cl>0?'#D93025':cl<-10?'#1A9E75':'#E8720C';
+                return (
+                  <tr key={i}>
+                    <td style={{fontWeight:500,whiteSpace:'nowrap'}}>{r.pname}</td>
+                    <td><span className="tag">{CNAMES[r.cat]||r.cat}</span></td>
+                    <td style={{color:'var(--gray-600)'}}>{NNAMES[r.ncc]||r.ncc}</td>
+                    <td style={{textAlign:'right'}}><span className="num">{fmtM(r.actual)}</span></td>
+                    <td style={{textAlign:'right'}}><span className="num">{fmtM(r.budget)}</span></td>
+                    <td style={{textAlign:'right',fontWeight:500,color:clColor}}><span className="num">{(cl>0?'+':'')+cl.toFixed(1)}%</span></td>
+                    <td style={{textAlign:'right'}}><span className="num">{fmtM(r.bid)}</span></td>
+                    <td><span className={`badge ${badgeCls}`}>{badgeLbl}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3}>Tổng cộng</td>
+                <td style={{textAlign:'right'}}><span className="num">{fmtM(tfoot.actual)}</span></td>
+                <td style={{textAlign:'right'}}><span className="num">{fmtM(tfoot.budget)}</span></td>
+                <td style={{textAlign:'right',color:tfoot.actual>tfoot.budget?'var(--red)':'var(--teal)'}}>
+                  <span className="num">{tfoot.budget>0?(((tfoot.actual-tfoot.budget)/tfoot.budget*100)>0?'+':'')+((tfoot.actual-tfoot.budget)/tfoot.budget*100).toFixed(1)+'%':'—'}</span>
+                </td>
+                <td style={{textAlign:'right'}}><span className="num">{fmtM(tfoot.bid)}</span></td>
+                <td/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PROJECTS PAGE
+// ============================================================
+function ProjectsPage(){
+  const [projects, setProjects] = useState(SAMPLE_PROJECTS);
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [form, setForm] = useState({id:'',name:'',location:'',start:'',end:'',value:'',status:'Active',pm:''});
+
+  function openAdd(){ setForm({id:'',name:'',location:'',start:'',end:'',value:'',status:'Active',pm:''}); setEditItem(null); setShowForm(true); }
+  function openEdit(p){ setForm({...p}); setEditItem(p.id); setShowForm(true); }
+  function save(){
+    if(!form.id||!form.name){showToast('Vui lòng nhập Mã và Tên dự án');return;}
+    if(editItem){
+      setProjects(ps=>ps.map(p=>p.id===editItem?{...form}:p));
+      showToast('Đã cập nhật dự án');
+    } else {
+      setProjects(ps=>[...ps,{...form}]);
+      showToast('Đã thêm dự án mới');
+    }
+    setShowForm(false);
+  }
+
+  return (
+    <div className="form-page">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div/>
+        <button className="btn btn-primary" onClick={openAdd} style={{display:'flex',alignItems:'center',gap:6}}>
+          <Icon name="plus" size={14} color="#fff"/> Thêm dự án
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="form-section">
+          <div className="form-section-title">
+            <Icon name="project" size={15} color="var(--navy)"/>
+            {editItem ? 'Cập nhật dự án' : 'Khai báo dự án mới'}
+          </div>
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label required">Mã dự án</label>
+              <input className="form-input" placeholder="VD: SYCB13" value={form.id} onChange={e=>setForm(f=>({...f,id:e.target.value.toUpperCase()}))} disabled={!!editItem}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label required">Tên dự án</label>
+              <input className="form-input" placeholder="Tên đầy đủ" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Địa điểm</label>
+              <input className="form-input" placeholder="Tỉnh / thành phố" value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Chỉ huy trưởng</label>
+              <input className="form-input" placeholder="Tên CHT" value={form.pm} onChange={e=>setForm(f=>({...f,pm:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Ngày khởi công</label>
+              <input className="form-input" placeholder="MM/YYYY" value={form.start} onChange={e=>setForm(f=>({...f,start:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Ngày dự kiến HT</label>
+              <input className="form-input" placeholder="MM/YYYY" value={form.end} onChange={e=>setForm(f=>({...f,end:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Giá trị HĐ (VNĐ, chưa VAT)</label>
+              <input className="form-input" placeholder="VD: 120000000000" value={form.value} onChange={e=>setForm(f=>({...f,value:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Trạng thái</label>
+              <select className="form-input sel" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                <option>Active</option><option>Closed</option><option>On Hold</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Hủy</button>
+            <button className="btn btn-primary" onClick={save}>{editItem?'Cập nhật':'Thêm mới'}</button>
+          </div>
+        </div>
+      )}
+
+      <div className="list-card">
+        <div className="list-card-header">
+          <span style={{fontWeight:600,fontSize:13}}>{projects.length} dự án</span>
+        </div>
+        {projects.map(p=>(
+          <div key={p.id} className="list-item" style={{gridTemplateColumns:'90px 1fr 120px 100px 120px auto'}}>
+            <span className="chip chip-navy" style={{fontSize:11,fontWeight:600}}>{p.id}</span>
+            <div>
+              <div style={{fontWeight:500,fontSize:13}}>{p.name}</div>
+              <div style={{fontSize:11,color:'var(--gray-500)'}}>{p.location} · {p.start} → {p.end} · CHT: {p.pm}</div>
+            </div>
+            <span style={{fontSize:12,color:'var(--gray-600)'}}>{p.value?fmtVND(Number(p.value)):''}</span>
+            <span><span className={`badge ${p.status==='Active'?'badge-ok':'badge-warn'}`}>{p.status}</span></span>
+            <span style={{fontSize:11,color:'var(--gray-500)'}}></span>
+            <div className="item-actions">
+              <button className="btn-icon" onClick={()=>openEdit(p)}><Icon name="edit" size={13}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BID / BUDGET PAGE (shared)
+// ============================================================
+function CostPlanPage({mode}){
+  const title    = mode==='bid' ? 'Chi phí đấu thầu' : 'Dự trù chi phí';
+  const color    = mode==='bid' ? 'var(--amber)'    : 'var(--blue)';
+  const [selProj, setSelProj] = useState(SAMPLE_PROJECTS[0].id);
+  const [rows, setRows] = useState([
+    {cat:'BAOCHE',   sub:'BAOCHE',   amount:''},
+    {cat:'CHONGSAN', sub:'CHONGSAN', amount:''},
+    {cat:'CONGTACTAM',sub:'CONTAINER',amount:''},
+    {cat:'VANCHUYEN',sub:'VANCHUYEN',amount:''},
+    {cat:'HAOHUT',   sub:'HAOHUT',   amount:''},
+    {cat:'VANTHANGTAI',sub:'CHIPHITHANG',amount:''},
+    {cat:'CAUTHAP',  sub:'CAUTHAP',  amount:''},
+  ]);
+
+  function addRow(){ setRows(r=>[...r,{cat:'BAOCHE',sub:'',amount:''}]); }
+  function removeRow(i){ setRows(r=>r.filter((_,idx)=>idx!==i)); }
+  function updateRow(i,k,v){ setRows(r=>r.map((row,idx)=>idx===i?{...row,[k]:v}:row)); }
+
+  const total = rows.reduce((s,r)=>s+(parseFloat(r.amount.replace(/,/g,''))||0),0);
+
+  function save(){
+    showToast(`Đã lưu ${title} cho dự án ${selProj}`);
+  }
+
+  return (
+    <div className="form-page">
+      <div className="form-section">
+        <div className="form-section-title">
+          <span style={{width:4,height:16,background:color,borderRadius:2,flexShrink:0,display:'inline-block'}}/>
+          {title} — Chọn dự án
+        </div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          {SAMPLE_PROJECTS.map(p=>(
+            <button key={p.id} className={`pill-btn${selProj===p.id?' active-proj':''}`} onClick={()=>setSelProj(p.id)}>
+              {p.name.replace('Sycamore ','Syc. ').replace('Hà Nam','HN').replace('Thiên Hương','T.Hương').replace('Cần Thơ','CT')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="form-section-title">{title} theo hạng mục — {SAMPLE_PROJECTS.find(p=>p.id===selProj)?.name}</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 160px 36px',gap:8,marginBottom:8}}>
+          {['Hạng mục chính','Chi tiết hạng mục','Thành tiền (VNĐ)',''].map((h,i)=>(
+            <div key={i} style={{fontSize:10,fontWeight:600,color:'var(--gray-500)',textTransform:'uppercase',letterSpacing:'.05em',padding:'0 2px'}}>{h}</div>
+          ))}
+        </div>
+        {rows.map((r,i)=>(
+          <div key={i} className="bill-row">
+            <select className="form-input sel" value={r.cat} onChange={e=>updateRow(i,'cat',e.target.value)}>
+              {Object.entries(CNAMES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+            <input className="form-input" placeholder="Chi tiết..." value={r.sub} onChange={e=>updateRow(i,'sub',e.target.value)}/>
+            <input className="form-input" placeholder="0" style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:12}} value={r.amount} onChange={e=>updateRow(i,'amount',e.target.value)}/>
+            <button className="btn-icon btn-danger btn-sm" onClick={()=>removeRow(i)} style={{height:34}}><Icon name="trash" size={12} color="var(--red)"/></button>
+          </div>
+        ))}
+        <button className="add-row-btn" onClick={addRow}><Icon name="plus" size={13}/>Thêm hạng mục</button>
+
+        <div className="divider"/>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 0'}}>
+          <span style={{fontSize:13,fontWeight:600,color:'var(--gray-700)'}}>Tổng cộng</span>
+          <span style={{fontSize:16,fontWeight:700,color:'var(--navy)',fontFamily:'var(--mono)'}}>{new Intl.NumberFormat('vi-VN').format(total)} ₫</span>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-secondary">Đặt lại</button>
+          <button className="btn btn-success" onClick={save}><Icon name="check" size={14} color="#fff"/> Lưu {title}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ACTUAL COST ENTRY PAGE
+// ============================================================
+function ActualCostPage(){
+  const [selProj,  setSelProj]  = useState(SAMPLE_PROJECTS[0].id);
+  const [selNCC,   setSelNCC]   = useState('TRUONGTHINH');
+  const [month,    setMonth]    = useState('');
+  const [billRef,  setBillRef]  = useState('');
+  const [pdfFile,  setPdfFile]  = useState(null);
+  const [pdfUrl,   setPdfUrl]   = useState('');
+  const [items, setItems] = useState([{cat:'BAOCHE',sub:'BAOCHE',amount:''}]);
+
+  function addItem(){ setItems(it=>[...it,{cat:'BAOCHE',sub:'',amount:''}]); }
+  function removeItem(i){ setItems(it=>it.filter((_,idx)=>idx!==i)); }
+  function updateItem(i,k,v){ setItems(it=>it.map((row,idx)=>idx===i?{...row,[k]:v}:row)); }
+
+  const total = items.reduce((s,r)=>s+(parseFloat(r.amount.replace(/,/g,''))||0),0);
+
+  function submit(){
+    if(!selProj||!selNCC||!month){showToast('Vui lòng chọn Dự án, NCC và Tháng');return;}
+    if(!items.some(r=>parseFloat(r.amount)>0)){showToast('Vui lòng nhập ít nhất 1 hạng mục có giá trị');return;}
+    // TODO: append to ACTUAL_COST sheet via Sheets API
+    showToast('Đã lưu chi phí thực tế thành công!');
+    setItems([{cat:'BAOCHE',sub:'BAOCHE',amount:''}]);
+    setBillRef(''); setPdfFile(null); setPdfUrl('');
+  }
+
+  return (
+    <div className="form-page">
+      {/* STEP 1 */}
+      <div className="form-section">
+        <div className="form-section-title"><Icon name="cost" size={15} color="var(--navy)"/>Thông tin chứng từ</div>
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label required">Dự án</label>
+            <select className="form-input sel" value={selProj} onChange={e=>setSelProj(e.target.value)}>
+              {SAMPLE_PROJECTS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label required">Nhà cung cấp (NCC)</label>
+            <select className="form-input sel" value={selNCC} onChange={e=>setSelNCC(e.target.value)}>
+              {SAMPLE_SUPPLIERS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label required">Tháng (MM/YYYY)</label>
+            <input className="form-input" placeholder="VD: 04/2025" value={month} onChange={e=>setMonth(e.target.value)}/>
+          </div>
+          <div className="form-field">
+            <label className="form-label">Số chứng từ / Bill ref</label>
+            <input className="form-input" placeholder="VD: BILL-TT-042" value={billRef} onChange={e=>setBillRef(e.target.value)}/>
+          </div>
+        </div>
+      </div>
+
+      {/* STEP 2 — Upload PDF */}
+      <div className="form-section">
+        <div className="form-section-title"><Icon name="upload" size={15} color="var(--navy)"/>Đính kèm bill PDF</div>
+        <div style={{border:'1.5px dashed var(--gray-300)',borderRadius:'var(--radius-lg)',padding:'20px',textAlign:'center',background:'var(--gray-50)',cursor:'pointer'}}
+          onClick={()=>document.getElementById('pdf-input').click()}>
+          {pdfFile ? (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,color:'var(--teal)'}}>
+              <Icon name="check" size={16} color="var(--teal)"/>
+              <span style={{fontSize:13,fontWeight:500}}>{pdfFile.name}</span>
+              <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setPdfFile(null);}} style={{marginLeft:4}}>Xóa</button>
+            </div>
+          ):(
+            <div style={{color:'var(--gray-400)'}}>
+              <div style={{marginBottom:6}}><Icon name="upload" size={24} color="var(--gray-300)"/></div>
+              <div style={{fontSize:13}}>Click để chọn file PDF hoặc kéo thả vào đây</div>
+              <div style={{fontSize:11,marginTop:4,color:'var(--gray-400)'}}>PDF, tối đa 10MB. File sẽ được upload lên Google Drive.</div>
+            </div>
+          )}
+        </div>
+        <input id="pdf-input" type="file" accept=".pdf" style={{display:'none'}} onChange={e=>setPdfFile(e.target.files[0])}/>
+        <div className="form-field" style={{marginTop:10}}>
+          <label className="form-label">Hoặc dán link Google Drive (nếu đã upload sẵn)</label>
+          <input className="form-input" placeholder="https://drive.google.com/..." value={pdfUrl} onChange={e=>setPdfUrl(e.target.value)}/>
+        </div>
+      </div>
+
+      {/* STEP 3 — Line items */}
+      <div className="form-section">
+        <div className="form-section-title"><Icon name="bid" size={15} color="var(--navy)"/>Chi tiết chi phí theo hạng mục</div>
+        <div style={{fontSize:11,color:'var(--gray-500)',marginBottom:10}}>
+          NCC <strong>{SAMPLE_SUPPLIERS.find(s=>s.id===selNCC)?.name}</strong> — Tháng <strong>{month||'chưa chọn'}</strong> — Dự án <strong>{SAMPLE_PROJECTS.find(p=>p.id===selProj)?.name}</strong>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 160px 36px',gap:8,marginBottom:8}}>
+          {['Hạng mục chính','Chi tiết hạng mục','Thành tiền (VNĐ)',''].map((h,i)=>(
+            <div key={i} style={{fontSize:10,fontWeight:600,color:'var(--gray-500)',textTransform:'uppercase',letterSpacing:'.05em',padding:'0 2px'}}>{h}</div>
+          ))}
+        </div>
+        {items.map((r,i)=>(
+          <div key={i} className="bill-row">
+            <select className="form-input sel" value={r.cat} onChange={e=>updateItem(i,'cat',e.target.value)}>
+              {Object.entries(CNAMES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+            <input className="form-input" placeholder="Chi tiết hạng mục..." value={r.sub} onChange={e=>updateItem(i,'sub',e.target.value)}/>
+            <input className="form-input" placeholder="0" style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:12}} value={r.amount} onChange={e=>updateItem(i,'amount',e.target.value)}/>
+            <button className="btn-icon btn-danger btn-sm" onClick={()=>removeItem(i)} style={{height:34}}><Icon name="trash" size={12} color="var(--red)"/></button>
+          </div>
+        ))}
+        <button className="add-row-btn" onClick={addItem}><Icon name="plus" size={13}/>Thêm hạng mục</button>
+
+        <div className="divider"/>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 0'}}>
+          <span style={{fontSize:13,fontWeight:600,color:'var(--gray-700)'}}>Tổng bill này</span>
+          <span style={{fontSize:18,fontWeight:700,color:'var(--navy)',fontFamily:'var(--mono)'}}>{new Intl.NumberFormat('vi-VN').format(total)} ₫</span>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-secondary">Hủy</button>
+          <button className="btn btn-success" onClick={submit}><Icon name="check" size={14} color="#fff"/> Lưu vào Sheets</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SUPPLIERS PAGE
+// ============================================================
+function SuppliersPage(){
+  const [suppliers, setSuppliers] = useState(SAMPLE_SUPPLIERS);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId]     = useState(null);
+  const [form, setForm] = useState({id:'',name:'',contact:'',phone:'',cats:'',status:'Active'});
+
+  function openAdd(){ setForm({id:'',name:'',contact:'',phone:'',cats:'',status:'Active'}); setEditId(null); setShowForm(true); }
+  function openEdit(s){ setForm({...s}); setEditId(s.id); setShowForm(true); }
+  function save(){
+    if(!form.id||!form.name){showToast('Vui lòng nhập Mã và Tên NCC');return;}
+    if(editId){ setSuppliers(ss=>ss.map(s=>s.id===editId?{...form}:s)); showToast('Đã cập nhật NCC'); }
+    else       { setSuppliers(ss=>[...ss,{...form}]); showToast('Đã thêm NCC mới'); }
+    setShowForm(false);
+  }
+
+  return (
+    <div className="form-page">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div/>
+        <button className="btn btn-primary" onClick={openAdd} style={{display:'flex',alignItems:'center',gap:6}}>
+          <Icon name="plus" size={14} color="#fff"/> Thêm NCC
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="form-section">
+          <div className="form-section-title"><Icon name="supplier" size={15} color="var(--navy)"/>{editId?'Cập nhật NCC':'Thêm NCC mới'}</div>
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label required">Mã NCC</label>
+              <input className="form-input" placeholder="VD: TRUONGTHINH" value={form.id} onChange={e=>setForm(f=>({...f,id:e.target.value.toUpperCase()}))} disabled={!!editId}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label required">Tên đầy đủ</label>
+              <input className="form-input" placeholder="Tên công ty" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Người liên hệ</label>
+              <input className="form-input" placeholder="Tên NTP" value={form.contact} onChange={e=>setForm(f=>({...f,contact:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Số điện thoại</label>
+              <input className="form-input" placeholder="09xx..." value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
+            </div>
+            <div className="form-field span2">
+              <label className="form-label">Hạng mục cung ứng (phân cách bằng dấu phẩy)</label>
+              <input className="form-input" placeholder="VD: BAOCHE,CHONGSAN" value={form.cats} onChange={e=>setForm(f=>({...f,cats:e.target.value.toUpperCase()}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label">Trạng thái</label>
+              <select className="form-input sel" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                <option>Active</option><option>Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Hủy</button>
+            <button className="btn btn-primary" onClick={save}>{editId?'Cập nhật':'Thêm mới'}</button>
+          </div>
+        </div>
+      )}
+
+      <div className="list-card">
+        <div className="list-card-header">
+          <span style={{fontWeight:600,fontSize:13}}>{suppliers.length} nhà cung cấp</span>
+        </div>
+        {suppliers.map(s=>(
+          <div key={s.id} className="list-item" style={{gridTemplateColumns:'130px 1fr 120px 80px auto'}}>
+            <span className="chip chip-navy" style={{fontSize:11,fontWeight:600}}>{s.id}</span>
+            <div>
+              <div style={{fontWeight:500,fontSize:13}}>{s.name}</div>
+              <div style={{fontSize:11,color:'var(--gray-500)'}}>{s.contact} · {s.phone}</div>
+            </div>
+            <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+              {(s.cats||'').split(',').filter(Boolean).map(c=>(
+                <span key={c} className="tag" style={{fontSize:9}}>{CNAMES[c]||c}</span>
+              ))}
+            </div>
+            <span><span className={`badge ${s.status==='Active'?'badge-ok':'badge-warn'}`}>{s.status}</span></span>
+            <div className="item-actions">
+              <button className="btn-icon" onClick={()=>openEdit(s)}><Icon name="edit" size={13}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// APP SHELL
+// ============================================================
+const PAGES = [
+  {id:'dashboard', label:'Dashboard',      icon:'dashboard', section:'Báo cáo'},
+  {id:'projects',  label:'Dự án',           icon:'project',   section:'Quản lý'},
+  {id:'bid',       label:'Chi phí đấu thầu',icon:'bid',       section:'Quản lý'},
+  {id:'budget',    label:'Dự trù',          icon:'budget',    section:'Quản lý'},
+  {id:'actual',    label:'Nhập chi phí TT', icon:'cost',      section:'Quản lý'},
+  {id:'suppliers', label:'Nhà cung cấp',    icon:'supplier',  section:'Danh mục'},
+];
+
+const PAGE_TITLES = {
+  dashboard: {title:'Dashboard tổng hợp',   sub:'Chi phí thuê thiết bị — tất cả dự án'},
+  projects:  {title:'Quản lý dự án',         sub:'Khai báo và cập nhật thông tin dự án'},
+  bid:       {title:'Chi phí đấu thầu',       sub:'Nhập và điều chỉnh chi phí đấu thầu theo hạng mục'},
+  budget:    {title:'Dự trù chi phí',         sub:'Nhập và điều chỉnh dự trù theo hạng mục'},
+  actual:    {title:'Nhập chi phí thực tế',  sub:'Cập nhật bill NCC theo tháng và dự án'},
+  suppliers: {title:'Nhà cung cấp',           sub:'Danh mục NCC và thông tin liên hệ'},
+};
+
+function App(){
+  const [page, setPage] = useState('dashboard');
+  const sections = [...new Set(PAGES.map(p=>p.section))];
+
+  const meta = PAGE_TITLES[page]||{};
+
+  return (
+    <div id="app">
+      {/* SIDEBAR */}
+      <div className="sidebar">
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-mark">W</div>
+          <div>
+            <div className="sidebar-logo-text">Wealthcons</div>
+            <div className="sidebar-logo-sub">Chi phí thiết bị</div>
+          </div>
+        </div>
+        <div className="sidebar-nav">
+          {sections.map(sec=>(
+            <div key={sec}>
+              <div className="nav-section-label">{sec}</div>
+              {PAGES.filter(p=>p.section===sec).map(p=>(
+                <button key={p.id} className={`nav-item${page===p.id?' active':''}`} onClick={()=>setPage(p.id)}>
+                  <Icon name={p.icon} size={15} color="currentColor"/>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="sidebar-bottom">
+          <div className="user-chip">
+            <div className="user-avatar">LT</div>
+            <div className="user-info">
+              <div className="user-name">Le Tran Anh Toan</div>
+              <div className="user-role">Supply Chain Manager</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div className="main">
+        <div className="topbar">
+          <div className="topbar-left">
+            <div className="page-title">{meta.title}</div>
+            <div className="page-subtitle">{meta.sub}</div>
+          </div>
+          <div className="topbar-right">
+            <button className="sync-btn" onClick={()=>showToast('Đang đồng bộ từ Google Sheets...')}>
+              <Icon name="refresh" size={13}/> Đồng bộ Sheets
+            </button>
+          </div>
+        </div>
+
+        <div className="content">
+          {page==='dashboard' && <Dashboard/>}
+          {page==='projects'  && <ProjectsPage/>}
+          {page==='bid'       && <CostPlanPage mode="bid"/>}
+          {page==='budget'    && <CostPlanPage mode="budget"/>}
+          {page==='actual'    && <ActualCostPage/>}
+          {page==='suppliers' && <SuppliersPage/>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+</script>
+</body>
+</html>
