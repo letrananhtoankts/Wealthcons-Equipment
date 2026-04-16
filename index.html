@@ -8,6 +8,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -216,6 +217,27 @@ tfoot td{padding:9px 12px;background:var(--gray-50);font-weight:600;border-top:2
 .chip-amber{background:var(--amber-light);color:var(--amber-dark);}
 .chip-teal{background:var(--teal-light);color:#0B6E50;}
 
+/* === LOGIN SCREEN === */
+.login-screen{position:fixed;inset:0;background:var(--navy-deep);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:24px;}
+.login-card{background:var(--white);border-radius:var(--radius-xl);padding:40px 48px;text-align:center;max-width:380px;width:90%;}
+.login-logo{width:56px;height:56px;background:var(--amber);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--navy-deep);margin:0 auto 16px;}
+.login-title{font-size:20px;font-weight:700;color:var(--gray-900);margin-bottom:6px;}
+.login-sub{font-size:13px;color:var(--gray-500);margin-bottom:28px;line-height:1.5;}
+.login-btn{width:100%;padding:11px 20px;border-radius:var(--radius);border:1px solid var(--gray-300);background:var(--white);font-size:14px;font-weight:500;color:var(--gray-800);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s;}
+.login-btn:hover{border-color:var(--navy);box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.login-google-icon{width:20px;height:20px;flex-shrink:0;}
+.user-email{font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.logout-btn{background:transparent;border:none;color:rgba(255,255,255,0.35);font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;font-family:var(--font);}
+.logout-btn:hover{color:rgba(255,255,255,0.7);}
+.role-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;}
+.role-admin{background:rgba(245,166,35,0.2);color:var(--amber);}
+.role-editor{background:rgba(26,158,117,0.15);color:var(--teal);}
+.role-viewer{background:rgba(46,111,217,0.15);color:var(--blue);}
+.no-permission{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;color:var(--gray-400);text-align:center;gap:12px;}
+.no-permission svg{opacity:.3;}
+.no-permission h3{font-size:15px;color:var(--gray-600);font-weight:500;}
+.no-permission p{font-size:13px;}
+
 /* === RESPONSIVE === */
 @media(max-width:900px){
   .chart-grid{grid-template-columns:1fr;}
@@ -239,8 +261,10 @@ const {useState, useEffect, useCallback, useRef, useMemo} = React;
 // CONFIG
 // ============================================================
 const CONFIG = {
-  SHEET_ID: '1WzAX5czxrCAye2S5CdTqSElKz3isXLhul9okEelGm1M',
-  API_KEY:  'AIzaSyDjmb3AlT_MhvZY-Gyh-hP8dW28O-fVnLw',
+  SHEET_ID:  '1CQA-kbeuokVCroFyROxVoGR0HDOy7imn',
+  API_KEY:   'AIzaSyDjmb3AlT_MhvZY-Gyh-hP8dW28O-fVnLw',
+  CLIENT_ID: '951533091636-5nkj0kn623qvhf0npl20inlu03hsiepr.apps.googleusercontent.com',
+  SCOPES:    'https://www.googleapis.com/auth/spreadsheets',
   SHEET_NAMES: {
     projects:   'PROJECTS',
     suppliers:  'SUPPLIERS',
@@ -249,8 +273,42 @@ const CONFIG = {
     budget:     'BUDGET',
     actual:     'ACTUAL_COST',
     dashboard:  'DASHBOARD_DATA',
-  }
+    users:      'USERS',
+  },
+  ADMIN_EMAIL: 'wealthconsphongcungung@gmail.com'
 };
+
+// ── AUTH STATE ────────────────────────────────────────────────
+let _accessToken = null;
+let _tokenClient = null;
+
+function getToken(){ return _accessToken; }
+
+function initTokenClient(onSuccess){
+  _tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.CLIENT_ID,
+    scope: CONFIG.SCOPES,
+    callback: (resp) => {
+      if(resp.error){ console.error('OAuth error:', resp); return; }
+      _accessToken = resp.access_token;
+      onSuccess && onSuccess(resp.access_token);
+    }
+  });
+}
+
+function requestToken(onSuccess){
+  if(!_tokenClient) initTokenClient(onSuccess);
+  else _tokenClient.callback = (resp) => {
+    if(!resp.error){ _accessToken = resp.access_token; onSuccess && onSuccess(resp.access_token); }
+  };
+  _tokenClient.requestAccessToken({prompt:''});
+}
+
+function revokeToken(onDone){
+  if(_accessToken){
+    google.accounts.oauth2.revoke(_accessToken, ()=>{ _accessToken=null; onDone&&onDone(); });
+  } else { onDone&&onDone(); }
+}
 
 
 
@@ -328,16 +386,29 @@ function actualForYear(d, year){
 // GOOGLE SHEETS API
 // ============================================================
 async function sheetsRead(range){
+  const token = getToken();
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?key=${CONFIG.API_KEY}`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('Sheets API error: '+res.status);
+  const headers = token ? {Authorization:`Bearer ${token}`} : {};
+  const res = await fetch(url, {headers});
+  if(!res.ok) throw new Error('Sheets read error: '+res.status);
   const data = await res.json();
   return data.values || [];
 }
 
 async function sheetsAppend(sheetName, values){
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${sheetName}:append?valueInputOption=USER_ENTERED&key=${CONFIG.API_KEY}`;
-  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({values})});
+  const token = getToken();
+  if(!token) throw new Error('Chưa đăng nhập — cần OAuth token để ghi dữ liệu');
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${sheetName}:append?valueInputOption=USER_ENTERED`;
+  const res = await fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+    body: JSON.stringify({values})
+  });
+  if(res.status===401){
+    // Token hết hạn → yêu cầu login lại
+    _accessToken = null;
+    throw new Error('Token hết hạn — vui lòng đăng nhập lại');
+  }
   if(!res.ok) throw new Error('Sheets append error: '+res.status);
   return res.json();
 }
@@ -442,24 +513,53 @@ function DateInput({value, onChange, placeholder, className, style}){
   );
 }
 
+// ── PARSE USERS ──────────────────────────────────────────────
+function parseUsers(rows){
+  // Hỗ trợ cả dòng 1 header và nhiều dòng header
+  const dataRows = rows.filter(r=>r&&r[0]&&r[0].toLowerCase()!=='email'&&r[0].toLowerCase()!=='email*');
+  return dataRows.map(r=>({
+    email:     (r[0]||'').trim().toLowerCase(),
+    role:      (r[1]||'viewer').trim().toLowerCase(),
+    full_name: r[2]||'',
+    status:    (r[3]||'Active').trim(),
+  }));
+}
+
+function getUserRole(users, email){
+  if(!email) return null;
+  const em = email.toLowerCase().trim();
+  // Fallback admin
+  if(em === CONFIG.ADMIN_EMAIL.toLowerCase()) return {email:em,role:'admin',full_name:'Le Tran Anh Toan',status:'Active'};
+  return users.find(u=>u.email===em&&u.status==='Active') || null;
+}
+
+// Permission helpers
+const CAN_WRITE  = (role) => ['admin','editor'].includes(role);
+const CAN_ADMIN  = (role) => role === 'admin';
+const CAN_READ   = (role) => ['admin','editor','viewer'].includes(role);
+
 // ── GLOBAL APP DATA ───────────────────────────────────────────
-async function loadAllData(setAppData){
+async function loadAllData(setAppDataOrCb){
+  const setAppData = typeof setAppDataOrCb==='function' ? setAppDataOrCb : ()=>{};
   try {
-    const [pR,sR,aR,bR,buR] = await Promise.all([
+    const [pR,sR,aR,bR,buR,uR] = await Promise.all([
       sheetsRead(`${CONFIG.SHEET_NAMES.projects}!A:J`),
       sheetsRead(`${CONFIG.SHEET_NAMES.suppliers}!A:L`),
       sheetsRead(`${CONFIG.SHEET_NAMES.actual}!A:N`),
       sheetsRead(`${CONFIG.SHEET_NAMES.bid}!A:J`),
       sheetsRead(`${CONFIG.SHEET_NAMES.budget}!A:J`),
+      sheetsRead(`${CONFIG.SHEET_NAMES.users}!A:D`),
     ]);
     const projects  = parseProjects(pR);
     const suppliers = parseSuppliers(sR);
     const bid       = parseBidBudget(bR);
     const budget    = parseBidBudget(buR);
     const actual    = parseActualCost(aR, bid, budget);
+    const users     = parseUsers(uR);
     projects.forEach(p=>{ PSHORT[p.id]=p.name; });
     suppliers.forEach(s=>{ NNAMES[s.id]=s.name; });
-    setAppData({projects,suppliers,actual,bid,budget,loaded:true});
+    const newData = {projects,suppliers,actual,bid,budget,users,loaded:true};
+    setAppData(newData);
     showToast('Đã đồng bộ từ Google Sheets ✓');
   } catch(e){
     console.error('Sheets load error:',e);
@@ -818,7 +918,8 @@ function Dashboard({appData}){
 // ============================================================
 // PROJECTS PAGE
 // ============================================================
-function ProjectsPage({appData, setAppData}){
+function ProjectsPage({appData, setAppData, userRole}){
+  if(!CAN_WRITE(userRole?.role)) return <div className='no-permission'><Icon name='project' size={48} color='var(--gray-300)'/><h3>Không có quyền</h3><p>Cần quyền editor hoặc admin.</p></div>;
   const projects = appData?.projects || SAMPLE_PROJECTS;
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -933,7 +1034,8 @@ function ProjectsPage({appData, setAppData}){
 // ============================================================
 // BID / BUDGET PAGE (shared)
 // ============================================================
-function CostPlanPage({mode, appData, setAppData}){
+function CostPlanPage({mode, appData, setAppData, userRole}){
+  if(!CAN_WRITE(userRole?.role)) return <div className='no-permission'><Icon name='bid' size={48} color='var(--gray-300)'/><h3>Không có quyền</h3><p>Cần quyền editor hoặc admin.</p></div>;
   const title = mode==='bid'?'Chi phí đấu thầu':'Dự trù chi phí';
   const color = mode==='bid'?'var(--amber)':'var(--blue)';
   const sheetName = mode==='bid'?CONFIG.SHEET_NAMES.bid:CONFIG.SHEET_NAMES.budget;
@@ -1024,7 +1126,8 @@ function CostPlanPage({mode, appData, setAppData}){
 // ============================================================
 // ACTUAL COST ENTRY PAGE
 // ============================================================
-function ActualCostPage({appData, setAppData}){
+function ActualCostPage({appData, setAppData, userRole}){
+  if(!CAN_WRITE(userRole?.role)) return <div className='no-permission'><Icon name='cost' size={48} color='var(--gray-300)'/><h3>Không có quyền</h3><p>Cần quyền editor hoặc admin.</p></div>;
   const projects  = appData?.projects||SAMPLE_PROJECTS;
   const suppliers = appData?.suppliers||SAMPLE_SUPPLIERS;
   const [selProj,  setSelProj]  = useState(projects[0]?.id||'');
@@ -1158,7 +1261,8 @@ function ActualCostPage({appData, setAppData}){
 // ============================================================
 // SUPPLIERS PAGE
 // ============================================================
-function SuppliersPage({appData, setAppData}){
+function SuppliersPage({appData, setAppData, userRole}){
+  if(!CAN_ADMIN(userRole?.role)) return <div className='no-permission'><Icon name='supplier' size={48} color='var(--gray-300)'/><h3>Không có quyền</h3><p>Chỉ Admin mới quản lý NCC.</p></div>;
   const suppliers = appData?.suppliers||SAMPLE_SUPPLIERS;
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId]     = useState(null);
@@ -1255,36 +1359,222 @@ function SuppliersPage({appData, setAppData}){
 }
 
 // ============================================================
+// USERS PAGE (Admin only)
+// ============================================================
+function UsersPage({appData, setAppData, userRole}){
+  const users = appData?.users||[];
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({email:'',role:'viewer',full_name:'',status:'Active'});
+
+  if(!CAN_ADMIN(userRole?.role)){
+    return (
+      <div className="no-permission">
+        <Icon name="supplier" size={48} color="var(--gray-300)"/>
+        <h3>Không có quyền truy cập</h3>
+        <p>Chỉ Admin mới xem được trang này.</p>
+      </div>
+    );
+  }
+
+  async function save(){
+    if(!form.email||!form.role){showToast('Vui lòng nhập Email và Role');return;}
+    setSaving(true);
+    try {
+      await sheetsAppend(CONFIG.SHEET_NAMES.users,[[form.email,form.role,form.full_name,form.status]]);
+      setAppData(d=>({...d,users:[...users,{...form}]}));
+      showToast('Đã thêm người dùng ✓');
+      setShowForm(false);
+      setForm({email:'',role:'viewer',full_name:'',status:'Active'});
+    } catch(e){ showToast('Lỗi: '+e.message); }
+    setSaving(false);
+  }
+
+  const roleColor = {admin:'role-admin',editor:'role-editor',viewer:'role-viewer'};
+
+  return (
+    <div className="form-page">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontSize:13,color:'var(--gray-500)'}}>
+          {users.length} người dùng · Chỉ admin thêm/xóa
+        </div>
+        <button className="btn btn-primary" onClick={()=>setShowForm(true)} style={{display:'flex',alignItems:'center',gap:6}}>
+          <Icon name="plus" size={14} color="#fff"/> Thêm người dùng
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="form-section">
+          <div className="form-section-title"><Icon name="supplier" size={15} color="var(--navy)"/>Thêm người dùng mới</div>
+          <div className="form-grid">
+            <div className="form-field span2">
+              <label className="form-label required">Email Google</label>
+              <input className="form-input" placeholder="user@gmail.com" value={form.email}
+                onChange={e=>setForm(f=>({...f,email:e.target.value.toLowerCase().trim()}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label required">Họ tên</label>
+              <input className="form-input" placeholder="Nguyễn Văn A" value={form.full_name}
+                onChange={e=>setForm(f=>({...f,full_name:e.target.value}))}/>
+            </div>
+            <div className="form-field">
+              <label className="form-label required">Quyền</label>
+              <select className="form-input sel" value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+                <option value="viewer">viewer — Chỉ xem Dashboard</option>
+                <option value="editor">editor — Nhập chi phí + xem</option>
+                <option value="admin">admin — Toàn quyền</option>
+              </select>
+            </div>
+          </div>
+          <div style={{background:'var(--blue-light)',border:'1px solid #B5D4F4',borderRadius:'var(--radius)',padding:'8px 12px',fontSize:12,color:'#0C447C',marginTop:8}}>
+            <strong>Lưu ý:</strong> Sau khi thêm, email này cần được thêm vào <strong>OAuth consent screen → Test users</strong> trên Google Cloud Console mới đăng nhập được.
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Hủy</button>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Đang lưu...':'Thêm mới'}</button>
+          </div>
+        </div>
+      )}
+
+      <div className="list-card">
+        <div className="list-card-header">
+          <span style={{fontWeight:600,fontSize:13}}>Danh sách người dùng</span>
+          <span style={{fontSize:11,color:'var(--gray-400)'}}>Phân quyền: admin › editor › viewer</span>
+        </div>
+        {users.length===0 && (
+          <div style={{padding:'24px',textAlign:'center',color:'var(--gray-400)',fontSize:13}}>
+            Chưa có người dùng nào — thêm mới hoặc đồng bộ Sheets
+          </div>
+        )}
+        {users.map((u,i)=>(
+          <div key={i} className="list-item" style={{gridTemplateColumns:'1fr 140px 120px 80px'}}>
+            <div>
+              <div style={{fontWeight:500,fontSize:13}}>{u.full_name||u.email}</div>
+              <div style={{fontSize:11,color:'var(--gray-500)'}}>{u.email}</div>
+            </div>
+            <span><span className={`role-badge ${roleColor[u.role]||'role-viewer'}`}>{u.role}</span></span>
+            <span style={{fontSize:11,color:'var(--gray-500)'}}>{u.email===CONFIG.ADMIN_EMAIL?'Chủ sở hữu':''}</span>
+            <span><span className={`badge ${u.status==='Active'?'badge-ok':'badge-warn'}`}>{u.status}</span></span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{marginTop:12,padding:'12px 16px',background:'var(--gray-50)',border:'1px solid var(--gray-200)',borderRadius:'var(--radius-lg)',fontSize:12,color:'var(--gray-600)'}}>
+        <strong>Hướng dẫn phân quyền:</strong><br/>
+        <span className="role-badge role-admin" style={{marginRight:6,marginTop:4,display:'inline-flex'}}>admin</span> Toàn quyền: xem, nhập, sửa, quản lý người dùng &nbsp;|&nbsp;
+        <span className="role-badge role-editor" style={{marginRight:6}}>editor</span> Nhập chi phí, xem dashboard &nbsp;|&nbsp;
+        <span className="role-badge role-viewer">viewer</span> Chỉ xem Dashboard — dành cho BGD
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
+function LoginScreen({onLogin}){
+  const [loading, setLoading] = useState(false);
+
+  function handleLogin(){
+    setLoading(true);
+    initTokenClient((token)=>{
+      setLoading(false);
+      onLogin(token);
+    });
+    requestToken((token)=>{
+      setLoading(false);
+      onLogin(token);
+    });
+  }
+
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-logo">W</div>
+        <div className="login-title">Wealthcons</div>
+        <div className="login-sub">Hệ thống theo dõi chi phí thuê thiết bị<br/>Đăng nhập để tiếp tục</div>
+        <button className="login-btn" onClick={handleLogin} disabled={loading}>
+          <svg className="login-google-icon" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          {loading ? 'Đang đăng nhập...' : 'Đăng nhập bằng Google'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // APP SHELL
 // ============================================================
 const PAGES = [
-  {id:'dashboard', label:'Dashboard',      icon:'dashboard', section:'Báo cáo'},
-  {id:'projects',  label:'Dự án',           icon:'project',   section:'Quản lý'},
-  {id:'bid',       label:'Chi phí đấu thầu',icon:'bid',       section:'Quản lý'},
-  {id:'budget',    label:'Dự trù',          icon:'budget',    section:'Quản lý'},
-  {id:'actual',    label:'Nhập chi phí TT', icon:'cost',      section:'Quản lý'},
-  {id:'suppliers', label:'Nhà cung cấp',    icon:'supplier',  section:'Danh mục'},
+  {id:'dashboard', label:'Dashboard',       icon:'dashboard', section:'Báo cáo',  roles:['admin','editor','viewer']},
+  {id:'projects',  label:'Dự án',            icon:'project',   section:'Quản lý',  roles:['admin','editor']},
+  {id:'bid',       label:'Chi phí đấu thầu', icon:'bid',       section:'Quản lý',  roles:['admin','editor']},
+  {id:'budget',    label:'Dự trù',           icon:'budget',    section:'Quản lý',  roles:['admin','editor']},
+  {id:'actual',    label:'Nhập chi phí TT',  icon:'cost',      section:'Quản lý',  roles:['admin','editor']},
+  {id:'suppliers', label:'Nhà cung cấp',     icon:'supplier',  section:'Danh mục', roles:['admin']},
+  {id:'users',     label:'Người dùng',       icon:'supplier',  section:'Danh mục', roles:['admin']},
 ];
 
 const PAGE_TITLES = {
-  dashboard: {title:'Dashboard tổng hợp',   sub:'Chi phí thuê thiết bị — tất cả dự án'},
-  projects:  {title:'Quản lý dự án',         sub:'Khai báo và cập nhật thông tin dự án'},
-  bid:       {title:'Chi phí đấu thầu',       sub:'Nhập và điều chỉnh chi phí đấu thầu theo hạng mục'},
-  budget:    {title:'Dự trù chi phí',         sub:'Nhập và điều chỉnh dự trù theo hạng mục'},
-  actual:    {title:'Nhập chi phí thực tế',  sub:'Cập nhật bill NCC theo tháng và dự án'},
-  suppliers: {title:'Nhà cung cấp',           sub:'Danh mục NCC và thông tin liên hệ'},
+  dashboard: {title:'Dashboard tổng hợp',    sub:'Chi phí thuê thiết bị — tất cả dự án'},
+  projects:  {title:'Quản lý dự án',          sub:'Khai báo và cập nhật thông tin dự án'},
+  bid:       {title:'Chi phí đấu thầu',        sub:'Nhập và điều chỉnh chi phí đấu thầu theo hạng mục'},
+  budget:    {title:'Dự trù chi phí',          sub:'Nhập và điều chỉnh dự trù theo hạng mục'},
+  actual:    {title:'Nhập chi phí thực tế',   sub:'Cập nhật bill NCC theo tháng và dự án'},
+  suppliers: {title:'Nhà cung cấp',            sub:'Danh mục NCC và thông tin liên hệ'},
+  users:     {title:'Quản lý người dùng',      sub:'Phân quyền truy cập — Admin only'},
 };
 
 function App(){
   const [page, setPage] = useState('dashboard');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [appData, setAppData] = useState({
     projects: SAMPLE_PROJECTS, suppliers: SAMPLE_SUPPLIERS,
-    actual: SAMPLE_ACTUAL, bid:[], budget:[], loaded:false
+    actual: SAMPLE_ACTUAL, bid:[], budget:[], users:[], loaded:false
   });
   const sections = [...new Set(PAGES.map(p=>p.section))];
   const meta = PAGE_TITLES[page]||{};
 
-  useEffect(()=>{ loadAllData(setAppData); },[]);
+  function handleLogin(token){
+    fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`)
+      .then(r=>r.json())
+      .then(info=>{
+        setUserInfo(info);
+        // Load data rồi check role
+        loadAllData((data)=>{
+          setAppData(data);
+          const role = getUserRole(data.users||[], info.email||'');
+          if(!role){
+            // Email không có trong USERS sheet → default viewer
+            setUserRole({email:info.email,role:'viewer',full_name:info.email,status:'Active'});
+          } else {
+            setUserRole(role);
+          }
+        });
+      })
+      .catch(()=>{
+        setUserRole({email:'',role:'viewer',full_name:'Guest',status:'Active'});
+        loadAllData(setAppData);
+      });
+    setIsLoggedIn(true);
+  }
+
+  function handleLogout(){
+    revokeToken(()=>{
+      setIsLoggedIn(false);
+      setUserInfo(null);
+      setAppData({projects:SAMPLE_PROJECTS,suppliers:SAMPLE_SUPPLIERS,actual:SAMPLE_ACTUAL,bid:[],budget:[],loaded:false});
+    });
+  }
+
+  if(!isLoggedIn) return <LoginScreen onLogin={handleLogin}/>;
 
   return (
     <div id="app">
@@ -1298,26 +1588,35 @@ function App(){
           </div>
         </div>
         <div className="sidebar-nav">
-          {sections.map(sec=>(
-            <div key={sec}>
-              <div className="nav-section-label">{sec}</div>
-              {PAGES.filter(p=>p.section===sec).map(p=>(
-                <button key={p.id} className={`nav-item${page===p.id?' active':''}`} onClick={()=>setPage(p.id)}>
-                  <Icon name={p.icon} size={15} color="currentColor"/>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          ))}
+          {sections.map(sec=>{
+            const visiblePages = PAGES.filter(p=>p.section===sec&&(!userRole||p.roles.includes(userRole.role)));
+            if(!visiblePages.length) return null;
+            return (
+              <div key={sec}>
+                <div className="nav-section-label">{sec}</div>
+                {visiblePages.map(p=>(
+                  <button key={p.id} className={`nav-item${page===p.id?' active':''}`} onClick={()=>setPage(p.id)}>
+                    <Icon name={p.icon} size={15} color="currentColor"/>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
         <div className="sidebar-bottom">
           <div className="user-chip">
-            <div className="user-avatar">LT</div>
+            <div className="user-avatar">{userInfo?.email?userInfo.email.substring(0,2).toUpperCase():'LT'}</div>
             <div className="user-info">
-              <div className="user-name">Le Tran Anh Toan</div>
-              <div className="user-role">Supply Chain Manager</div>
+              <div className="user-name">{userRole?.full_name||userInfo?.email||'User'}</div>
+              <div style={{display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+                <span className={`role-badge role-${userRole?.role||'viewer'}`}>{userRole?.role||'viewer'}</span>
+              </div>
             </div>
           </div>
+          <button className="logout-btn" onClick={handleLogout} style={{width:'100%',textAlign:'left',padding:'4px 10px',marginTop:4}}>
+            Đăng xuất
+          </button>
         </div>
       </div>
 
@@ -1336,12 +1635,13 @@ function App(){
         </div>
 
         <div className="content">
-          {page==='dashboard' && <Dashboard appData={appData}/>}
-          {page==='projects'  && <ProjectsPage appData={appData} setAppData={setAppData}/>}
-          {page==='bid'       && <CostPlanPage mode="bid" appData={appData} setAppData={setAppData}/>}
-          {page==='budget'    && <CostPlanPage mode="budget" appData={appData} setAppData={setAppData}/>}
-          {page==='actual'    && <ActualCostPage appData={appData} setAppData={setAppData}/>}
-          {page==='suppliers' && <SuppliersPage appData={appData} setAppData={setAppData}/>}
+          {page==='dashboard' && <Dashboard appData={appData} userRole={userRole}/>}
+          {page==='projects'  && <ProjectsPage appData={appData} setAppData={setAppData} userRole={userRole}/>}
+          {page==='bid'       && <CostPlanPage mode="bid" appData={appData} setAppData={setAppData} userRole={userRole}/>}
+          {page==='budget'    && <CostPlanPage mode="budget" appData={appData} setAppData={setAppData} userRole={userRole}/>}
+          {page==='actual'    && <ActualCostPage appData={appData} setAppData={setAppData} userRole={userRole}/>}
+          {page==='suppliers' && <SuppliersPage appData={appData} setAppData={setAppData} userRole={userRole}/>}
+          {page==='users'     && <UsersPage appData={appData} setAppData={setAppData} userRole={userRole}/>}
         </div>
       </div>
     </div>
