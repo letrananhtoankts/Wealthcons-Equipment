@@ -1529,42 +1529,36 @@ const PAGE_TITLES = {
 };
 
 function App(){
-  const [page, setPage] = useState('dashboard');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const [page, setPage]       = useState('dashboard');
+  const [authState, setAuthState] = useState({user:null, role:null});
   const [appData, setAppData] = useState({
-    projects: SAMPLE_PROJECTS, suppliers: SAMPLE_SUPPLIERS,
-    actual: SAMPLE_ACTUAL, bid:[], budget:[], users:[], loaded:false
+    projects:SAMPLE_PROJECTS, suppliers:SAMPLE_SUPPLIERS,
+    actual:SAMPLE_ACTUAL, bid:[], budget:[], users:[], loaded:false
   });
+
+  useEffect(()=>{
+    window._onAuthSuccess = (userObj) => {
+      // Load data rồi xác định role
+      loadAllData((data)=>{
+        setAppData(prev=>({...prev,...data}));
+        const roleObj = getUserRole(data.users||[], userObj.email||'');
+        setAuthState({
+          user: userObj,
+          role: roleObj || {email:userObj.email,role:'viewer',full_name:userObj.name||userObj.email,status:'Active'}
+        });
+      });
+    };
+    window._onAuthSignOut = () => {
+      setAuthState({user:null, role:null});
+      setAppData({projects:SAMPLE_PROJECTS,suppliers:SAMPLE_SUPPLIERS,actual:SAMPLE_ACTUAL,bid:[],budget:[],users:[],loaded:false});
+    };
+    return ()=>{ window._onAuthSuccess=null; window._onAuthSignOut=null; };
+  },[]);
+
+  const {user:userInfo, role:userRole} = authState;
   const sections = [...new Set(PAGES.map(p=>p.section))];
   const meta = PAGE_TITLES[page]||{};
-
-  function handleLogin(userInfoObj){
-    // userInfoObj = {email, name, picture} từ Google JWT
-    setIsLoggedIn(true);
-    setUserInfo(userInfoObj);
-    loadAllData((data)=>{
-      setAppData(prev=>({...prev,...data}));
-      const role = getUserRole(data.users||[], userInfoObj.email||'');
-      setUserRole(role || {
-        email: userInfoObj.email,
-        role: 'viewer',
-        full_name: userInfoObj.name||userInfoObj.email,
-        status: 'Active'
-      });
-    });
-  }
-
-  function handleLogout(){
-    revokeToken(()=>{
-      setIsLoggedIn(false);
-      setUserInfo(null);
-      setAppData({projects:SAMPLE_PROJECTS,suppliers:SAMPLE_SUPPLIERS,actual:SAMPLE_ACTUAL,bid:[],budget:[],loaded:false});
-    });
-  }
-
-  if(!isLoggedIn) return <LoginScreen onLogin={handleLogin}/>;
+  const currentRole = userRole?.role||'viewer';
 
   return (
     <div id="app">
@@ -1579,7 +1573,6 @@ function App(){
         </div>
         <div className="sidebar-nav">
           {sections.map(sec=>{
-            const currentRole = userRole?.role||'viewer';
             const visiblePages = PAGES.filter(p=>p.section===sec&&p.roles.includes(currentRole));
             if(!visiblePages.length) return null;
             return (
@@ -1597,17 +1590,14 @@ function App(){
         </div>
         <div className="sidebar-bottom">
           <div className="user-chip">
-            <div className="user-avatar">{userInfo?.name?userInfo.name.split(' ').map(w=>w[0]).slice(-2).join('').toUpperCase():'LT'}</div>
+            <div className="user-avatar">
+              {userInfo?.name ? userInfo.name.split(' ').slice(-2).map(w=>w[0]).join('').toUpperCase() : 'W'}
+            </div>
             <div className="user-info">
-              <div className="user-name">{userRole?.full_name||userInfo?.name||userInfo?.email||'User'}</div>
-              <div style={{display:'flex',alignItems:'center',gap:4,marginTop:2}}>
-                <span className={`role-badge role-${userRole?.role||'viewer'}`}>{userRole?.role||'viewer'}</span>
-              </div>
+              <div className="user-name">{userInfo?.name||'Wealthcons'}</div>
+              <div className="user-role">{userRole?.role||'Chưa đăng nhập'}</div>
             </div>
           </div>
-          <button className="logout-btn" onClick={handleLogout} style={{width:'100%',textAlign:'left',padding:'4px 10px',marginTop:4}}>
-            Đăng xuất
-          </button>
         </div>
       </div>
 
@@ -1627,7 +1617,7 @@ function App(){
                 <>
                   {userInfo.picture && <img className="auth-avatar" src={userInfo.picture} alt=""/>}
                   <span className="auth-name">{userInfo.given_name||userInfo.name}</span>
-                  <span className={`auth-role-badge role-${userRole?.role||'viewer'}-b`}>{userRole?.role||'viewer'}</span>
+                  <span className={`auth-role-badge role-${currentRole}-b`}>{currentRole}</span>
                   <button className="btn-signout" onClick={signOut}>Đăng xuất</button>
                 </>
               ):(
