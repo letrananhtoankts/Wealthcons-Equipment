@@ -8,7 +8,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://accounts.google.com/gsi/client"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -237,6 +237,18 @@ tfoot td{padding:9px 12px;background:var(--gray-50);font-weight:600;border-top:2
 .no-permission svg{opacity:.3;}
 .no-permission h3{font-size:15px;color:var(--gray-600);font-weight:500;}
 .no-permission p{font-size:13px;}
+/* === AUTH TOPBAR === */
+.auth-area{display:flex;align-items:center;gap:8px;}
+.auth-avatar{width:26px;height:26px;border-radius:50%;border:2px solid var(--amber);object-fit:cover;}
+.auth-name{font-size:11px;color:var(--gray-500);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.auth-role-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;}
+.role-admin-b{background:rgba(245,166,35,0.15);color:var(--amber-dark);}
+.role-editor-b{background:rgba(26,158,117,0.12);color:var(--teal);}
+.role-viewer-b{background:rgba(46,111,217,0.12);color:var(--blue);}
+.btn-signin{padding:6px 14px;border-radius:var(--radius);border:none;background:var(--amber);color:var(--navy-deep);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}
+.btn-signin:hover{background:var(--amber-dark);color:var(--white);}
+.btn-signout{padding:5px 12px;border-radius:var(--radius);border:1px solid var(--gray-300);background:transparent;color:var(--gray-500);font-size:11px;cursor:pointer;font-family:var(--font);transition:all .15s;}
+.btn-signout:hover{border-color:var(--red);color:var(--red);}
 
 /* === RESPONSIVE === */
 @media(max-width:900px){
@@ -278,72 +290,59 @@ const CONFIG = {
   ADMIN_EMAIL: 'wealthconsphongcungung@gmail.com'
 };
 
-// ── AUTH STATE ────────────────────────────────────────────────
-let _accessToken = null;
-let _onLoginSuccess = null;
+// ── AUTH STATE ─────────────────────────────────────────────────
+let authToken   = null;
+let authUser    = null;
+let tokenClient = null;
 
-function getToken(){ return _accessToken; }
+function getToken(){ return authToken; }
 
-// Gọi sau khi GIS load xong
-function initGIS(){
-  google.accounts.id.initialize({
-    client_id: CONFIG.CLIENT_ID,
-    callback: handleGISCallback,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  });
-}
-
-// Callback nhận id_token từ Google Sign-In button
-function handleGISCallback(response){
-  if(!response.credential){ return; }
-  // Decode JWT payload để lấy email, name
-  const payload = JSON.parse(atob(response.credential.split('.')[1]));
-  // Dùng token client để lấy access_token (cần để ghi Sheets)
-  const tc = google.accounts.oauth2.initTokenClient({
+function initAuth(){
+  if(typeof google==='undefined'){ setTimeout(initAuth,500); return; }
+  tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
     scope: CONFIG.SCOPES,
-    hint: payload.email,
     callback: (resp) => {
-      if(resp.error){ console.error('Token error:', resp); return; }
-      _accessToken = resp.access_token;
-      _onLoginSuccess && _onLoginSuccess(payload);
+      if(resp.error){ showToast('Đăng nhập thất bại: '+resp.error); return; }
+      authToken = resp.access_token;
+      fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+        headers:{Authorization:'Bearer '+authToken}
+      })
+      .then(r=>r.json())
+      .then(u=>{
+        authUser = u;
+        localStorage.setItem('wc_session', JSON.stringify({
+          email:u.email, name:u.name, picture:u.picture||'',
+          given_name:u.given_name||u.name.split(' ')[0]
+        }));
+        if(window._onAuthSuccess) window._onAuthSuccess(u);
+      });
     }
   });
-  tc.requestAccessToken({prompt:''});
-}
-
-function requestToken(onSuccess, onError){
-  _onLoginSuccess = onSuccess;
-  try {
-    google.accounts.id.prompt((n) => {
-      if(n.isNotDisplayed() || n.isSkippedMoment()){
-        // Fallback: dùng token client trực tiếp
-        const tc = google.accounts.oauth2.initTokenClient({
-          client_id: CONFIG.CLIENT_ID,
-          scope: CONFIG.SCOPES,
-          callback: (resp) => {
-            if(resp.error){ onError&&onError(resp.error_description||resp.error); return; }
-            _accessToken = resp.access_token;
-            // Lấy user info
-            fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:`Bearer ${resp.access_token}`}})
-              .then(r=>r.json()).then(info=>{ onSuccess&&onSuccess(info); })
-              .catch(()=>onSuccess&&onSuccess({email:'',name:'User'}));
-          }
-        });
-        tc.requestAccessToken({prompt:'select_account'});
-      }
-    });
-  } catch(e){
-    onError && onError(e.message);
+  // Khôi phục session từ localStorage
+  const saved = localStorage.getItem('wc_session');
+  if(saved){
+    try{
+      const s = JSON.parse(saved);
+      authUser = s;
+      if(window._onAuthSuccess) window._onAuthSuccess(s);
+    }catch(e){ localStorage.removeItem('wc_session'); }
   }
 }
 
-function revokeToken(onDone){
-  if(_accessToken){
-    google.accounts.oauth2.revoke(_accessToken, ()=>{ _accessToken=null; onDone&&onDone(); });
-  } else { onDone&&onDone(); }
+function signIn(){
+  if(!tokenClient){ showToast('Google OAuth chưa sẵn sàng, thử lại sau'); return; }
+  tokenClient.requestAccessToken({prompt:'select_account'});
 }
+
+function signOut(){
+  if(authToken) try{ google.accounts.oauth2.revoke(authToken,()=>{}); }catch(e){}
+  authToken=null; authUser=null;
+  localStorage.removeItem('wc_session');
+  if(window._onAuthSignOut) window._onAuthSignOut();
+}
+
+window.addEventListener('load', ()=>{ setTimeout(initAuth,800); });
 
 
 
@@ -421,9 +420,8 @@ function actualForYear(d, year){
 // GOOGLE SHEETS API
 // ============================================================
 async function sheetsRead(range){
-  const token = getToken();
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?key=${CONFIG.API_KEY}`;
-  const headers = token ? {Authorization:`Bearer ${token}`} : {};
+  const headers = authToken ? {Authorization:'Bearer '+authToken} : {};
   const res = await fetch(url, {headers});
   if(!res.ok) throw new Error('Sheets read error: '+res.status);
   const data = await res.json();
@@ -431,18 +429,20 @@ async function sheetsRead(range){
 }
 
 async function sheetsAppend(sheetName, values){
-  const token = getToken();
-  if(!token) throw new Error('Chưa đăng nhập — cần OAuth token để ghi dữ liệu');
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${sheetName}:append?valueInputOption=USER_ENTERED`;
+  if(!authToken){
+    showToast('Cần đăng nhập để ghi dữ liệu');
+    throw new Error('Chưa đăng nhập');
+  }
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${sheetName}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   const res = await fetch(url, {
     method:'POST',
-    headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
     body: JSON.stringify({values})
   });
   if(res.status===401){
-    // Token hết hạn → yêu cầu login lại
-    _accessToken = null;
-    throw new Error('Token hết hạn — vui lòng đăng nhập lại');
+    authToken=null;
+    showToast('Phiên đăng nhập hết hạn — vui lòng đăng nhập lại');
+    throw new Error('Token hết hạn');
   }
   if(!res.ok) throw new Error('Sheets append error: '+res.status);
   return res.json();
@@ -1506,75 +1506,6 @@ function UsersPage({appData, setAppData, userRole}){
 }
 
 // ============================================================
-// LOGIN SCREEN
-// ============================================================
-function LoginScreen({onLogin}){
-  const btnRef = useRef(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(()=>{
-    // Render Google Sign-In button chuẩn
-    if(window.google && btnRef.current){
-      google.accounts.id.initialize({
-        client_id: CONFIG.CLIENT_ID,
-        callback: (resp) => {
-          if(!resp.credential){ setError('Đăng nhập thất bại'); return; }
-          setLoading(true);
-          // Decode user info từ JWT
-          const payload = JSON.parse(atob(resp.credential.split('.')[1]));
-          // Lấy access token để ghi Sheets
-          const tc = google.accounts.oauth2.initTokenClient({
-            client_id: CONFIG.CLIENT_ID,
-            scope: CONFIG.SCOPES,
-            hint: payload.email,
-            callback: (tokenResp) => {
-              setLoading(false);
-              if(tokenResp.error){ setError('Lỗi lấy token: '+tokenResp.error); return; }
-              _accessToken = tokenResp.access_token;
-              onLogin({
-                email: payload.email,
-                name:  payload.name,
-                picture: payload.picture,
-              });
-            }
-          });
-          tc.requestAccessToken({prompt:''});
-        },
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        ux_mode: 'popup',
-      });
-      google.accounts.id.renderButton(btnRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: 280,
-        text: 'signin_with',
-        locale: 'vi',
-      });
-    }
-  },[]);
-
-  return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="login-logo">W</div>
-        <div className="login-title">Wealthcons</div>
-        <div className="login-sub">Hệ thống theo dõi chi phí thuê thiết bị<br/>Đăng nhập để tiếp tục</div>
-        {loading
-          ? <div style={{padding:'12px 0',color:'var(--gray-500)',fontSize:13}}>Đang xác thực...</div>
-          : <div ref={btnRef} style={{display:'flex',justifyContent:'center',minHeight:44}}/>
-        }
-        {error && <div style={{marginTop:10,fontSize:12,color:'var(--red)',background:'var(--red-light)',padding:'8px 12px',borderRadius:'var(--radius)'}}>{error}</div>}
-        <div style={{marginTop:16,fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>
-          Chỉ email được cấp quyền mới đăng nhập được.<br/>Liên hệ admin để được cấp quyền.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
 // APP SHELL
 // ============================================================
 const PAGES = [
@@ -1648,7 +1579,8 @@ function App(){
         </div>
         <div className="sidebar-nav">
           {sections.map(sec=>{
-            const visiblePages = PAGES.filter(p=>p.section===sec&&(!userRole||p.roles.includes(userRole.role)));
+            const currentRole = userRole?.role||'viewer';
+            const visiblePages = PAGES.filter(p=>p.section===sec&&p.roles.includes(currentRole));
             if(!visiblePages.length) return null;
             return (
               <div key={sec}>
@@ -1688,8 +1620,22 @@ function App(){
           </div>
           <div className="topbar-right">
             <button className="sync-btn" onClick={()=>loadAllData((d)=>setAppData(prev=>({...prev,...d})))}>
-              <Icon name="refresh" size={13}/> Đồng bộ Sheets
+              <Icon name="refresh" size={13}/> Đồng bộ
             </button>
+            <div className="auth-area">
+              {userInfo ? (
+                <>
+                  {userInfo.picture && <img className="auth-avatar" src={userInfo.picture} alt=""/>}
+                  <span className="auth-name">{userInfo.given_name||userInfo.name}</span>
+                  <span className={`auth-role-badge role-${userRole?.role||'viewer'}-b`}>{userRole?.role||'viewer'}</span>
+                  <button className="btn-signout" onClick={signOut}>Đăng xuất</button>
+                </>
+              ):(
+                <button className="btn-signin" onClick={signIn}>
+                  Đăng nhập Google
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
