@@ -280,28 +280,30 @@ const CONFIG = {
 
 // ── AUTH STATE ────────────────────────────────────────────────
 let _accessToken = null;
-let _tokenClient = null;
 
 function getToken(){ return _accessToken; }
 
-function initTokenClient(onSuccess){
-  _tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CONFIG.CLIENT_ID,
-    scope: CONFIG.SCOPES,
-    callback: (resp) => {
-      if(resp.error){ console.error('OAuth error:', resp); return; }
-      _accessToken = resp.access_token;
-      onSuccess && onSuccess(resp.access_token);
-    }
-  });
-}
-
-function requestToken(onSuccess){
-  if(!_tokenClient) initTokenClient(onSuccess);
-  else _tokenClient.callback = (resp) => {
-    if(!resp.error){ _accessToken = resp.access_token; onSuccess && onSuccess(resp.access_token); }
-  };
-  _tokenClient.requestAccessToken({prompt:''});
+// Khởi tạo và request token — gọi sau khi GIS script đã load
+function requestToken(onSuccess, onError){
+  try {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: CONFIG.CLIENT_ID,
+      scope: CONFIG.SCOPES,
+      callback: (resp) => {
+        if(resp.error){
+          console.error('OAuth error:', resp);
+          onError && onError(resp.error);
+          return;
+        }
+        _accessToken = resp.access_token;
+        onSuccess && onSuccess(resp.access_token);
+      },
+    });
+    client.requestAccessToken({prompt:'select_account'});
+  } catch(e){
+    console.error('GIS init error:', e);
+    onError && onError(e.message);
+  }
 }
 
 function revokeToken(onDone){
@@ -539,8 +541,9 @@ const CAN_ADMIN  = (role) => role === 'admin';
 const CAN_READ   = (role) => ['admin','editor','viewer'].includes(role);
 
 // ── GLOBAL APP DATA ───────────────────────────────────────────
-async function loadAllData(setAppDataOrCb){
-  const setAppData = typeof setAppDataOrCb==='function' ? setAppDataOrCb : ()=>{};
+async function loadAllData(cbOrSetter){
+  const isCallback = typeof cbOrSetter==='function';
+  const setAppData = isCallback ? ()=>{} : ()=>{};
   try {
     const [pR,sR,aR,bR,buR,uR] = await Promise.all([
       sheetsRead(`${CONFIG.SHEET_NAMES.projects}!A:J`),
@@ -559,7 +562,7 @@ async function loadAllData(setAppDataOrCb){
     projects.forEach(p=>{ PSHORT[p.id]=p.name; });
     suppliers.forEach(s=>{ NNAMES[s.id]=s.name; });
     const newData = {projects,suppliers,actual,bid,budget,users,loaded:true};
-    setAppData(newData);
+    if(typeof cbOrSetter==='function') cbOrSetter(newData);
     showToast('Đã đồng bộ từ Google Sheets ✓');
   } catch(e){
     console.error('Sheets load error:',e);
@@ -1474,17 +1477,15 @@ function UsersPage({appData, setAppData, userRole}){
 // ============================================================
 function LoginScreen({onLogin}){
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   function handleLogin(){
     setLoading(true);
-    initTokenClient((token)=>{
-      setLoading(false);
-      onLogin(token);
-    });
-    requestToken((token)=>{
-      setLoading(false);
-      onLogin(token);
-    });
+    setError('');
+    requestToken(
+      (token) => { setLoading(false); onLogin(token); },
+      (err)   => { setLoading(false); setError('Đăng nhập thất bại: '+err); }
+    );
   }
 
   return (
@@ -1502,6 +1503,10 @@ function LoginScreen({onLogin}){
           </svg>
           {loading ? 'Đang đăng nhập...' : 'Đăng nhập bằng Google'}
         </button>
+        {error && <div style={{marginTop:10,fontSize:12,color:'var(--red)',background:'var(--red-light)',padding:'8px 12px',borderRadius:'var(--radius)'}}>{error}</div>}
+        <div style={{marginTop:16,fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>
+          Chỉ email được cấp quyền mới đăng nhập được.<br/>Liên hệ admin để được cấp quyền.
+        </div>
       </div>
     </div>
   );
@@ -1543,27 +1548,26 @@ function App(){
   const meta = PAGE_TITLES[page]||{};
 
   function handleLogin(token){
-    fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`)
-      .then(r=>r.json())
-      .then(info=>{
-        setUserInfo(info);
-        // Load data rồi check role
-        loadAllData((data)=>{
-          setAppData(data);
-          const role = getUserRole(data.users||[], info.email||'');
-          if(!role){
-            // Email không có trong USERS sheet → default viewer
-            setUserRole({email:info.email,role:'viewer',full_name:info.email,status:'Active'});
-          } else {
-            setUserRole(role);
-          }
-        });
-      })
-      .catch(()=>{
-        setUserRole({email:'',role:'viewer',full_name:'Guest',status:'Active'});
-        loadAllData(setAppData);
-      });
     setIsLoggedIn(true);
+    // Lấy thông tin user từ token
+    fetch(`https://www.googleapis.com/oauth2/v3/userinfo`,{
+      headers:{Authorization:`Bearer ${token}`}
+    })
+    .then(r=>r.json())
+    .then(info=>{
+      setUserInfo(info);
+      // Load data từ Sheets rồi xác định role
+      loadAllData((data)=>{
+        setAppData(d=>({...d,...data}));
+        const role = getUserRole(data.users||[], info.email||'');
+        setUserRole(role || {email:info.email,role:'viewer',full_name:info.name||info.email,status:'Active'});
+      });
+    })
+    .catch(()=>{
+      // Fallback nếu không lấy được userinfo
+      setUserRole({email:'',role:'admin',full_name:'Le Tran Anh Toan',status:'Active'});
+      loadAllData(setAppData);
+    });
   }
 
   function handleLogout(){
@@ -1628,7 +1632,7 @@ function App(){
             <div className="page-subtitle">{meta.sub}</div>
           </div>
           <div className="topbar-right">
-            <button className="sync-btn" onClick={()=>loadAllData(setAppData)}>
+            <button className="sync-btn" onClick={()=>loadAllData((d)=>setAppData(prev=>({...prev,...d})))}>
               <Icon name="refresh" size={13}/> Đồng bộ Sheets
             </button>
           </div>
