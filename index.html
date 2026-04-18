@@ -263,10 +263,10 @@
 // ============================================================
 const CONFIG = {
   CLIENT_ID: '951533091636-5nkj0kn623qvhf0npl20inlu03hsiepr.apps.googleusercontent.com',
-  API_KEY: 'AIzaSyDjmb3AlT_MhvZY-Gyh-hP8dW28O-fVnLw',
-  SPREADSHEET_ID: '1CQA-kbeuokVCroFyROxVoGR0HDOy7imn',
+  API_KEY: 'ĐIỀN_API_KEY_VÀO_ĐÂY',
+  SPREADSHEET_ID: 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY',
   SCOPES: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
-  ADMIN_EMAILS: ['letrananhtoancts@gmail.com'],
+  ADMIN_EMAILS: ['letrananhtoan.kts@gmail.com'],
 };
 
 const CATEGORIES = [
@@ -424,26 +424,18 @@ function useAuth() {
     if (saved) {
       try { setUser(JSON.parse(saved)); } catch(e) {}
     }
-    // Load GIS
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.onload = () => {
-      tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-        client_id: CONFIG.CLIENT_ID,
-        scope: CONFIG.SCOPES,
-        callback: (resp) => {
-          if (resp.access_token) {
-            setToken(resp.access_token);
-            // Store token expiry
-            localStorage.setItem('wc_token', resp.access_token);
-            localStorage.setItem('wc_token_exp', String(Date.now() + (resp.expires_in * 1000)));
-          }
-        },
-      });
+    // Preload GIS script immediately on page load (before user clicks anything)
+    if (!window.google?.accounts) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => setLoading(false);
+      script.onerror = () => setLoading(false);
+      document.head.appendChild(script);
+    } else {
       setLoading(false);
-    };
-    document.head.appendChild(script);
-
+    }
     // Restore token if not expired
     const savedToken = localStorage.getItem('wc_token');
     const savedExp = parseInt(localStorage.getItem('wc_token_exp') || '0');
@@ -478,44 +470,15 @@ function useAuth() {
 // LOGIN PAGE
 // ============================================================
 function LoginPage({ onLogin }) {
-  const [step, setStep] = useState('idle'); // idle | loading | verify | error
+  const [step, setStep] = useState('idle');
   const [error, setError] = useState('');
-  const btnRef = useRef(null);
   const toast = useToast();
 
-  // Decode Google JWT
-  const decodeJwt = (t) => {
-    try { return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-    catch(e) { return null; }
-  };
-
-  // Step 2: after identity confirmed, get OAuth token for Sheets
-  const requestSheetsToken = (email, name, picture) => {
-    const tc = google.accounts.oauth2.initTokenClient({
-      client_id: CONFIG.CLIENT_ID,
-      scope: CONFIG.SCOPES,
-      hint: email, // pre-select the account user just chose
-      callback: async (resp) => {
-        if (resp.error) {
-          setStep('error');
-          setError('Không lấy được quyền Sheets: ' + (resp.error_description || resp.error));
-          return;
-        }
-        localStorage.setItem('wc_token', resp.access_token);
-        localStorage.setItem('wc_token_exp', String(Date.now() + (resp.expires_in||3600)*1000));
-        await verifyAndLogin(email, name, picture);
-      },
-      error_callback: (err) => {
-        setStep('idle');
-        if (err.type !== 'popup_closed') setError('Lỗi: ' + (err.message || err.type));
-      },
-    });
-    tc.requestAccessToken({ prompt: '' }); // prompt:'' = không hỏi lại nếu đã consent
-  };
-
-  // Step 3: check USERS sheet → onLogin
-  const verifyAndLogin = async (email, name, picture) => {
+  const verifyAndLogin = async (email, name, picture, accessToken) => {
     setStep('verify');
+    // Save token
+    localStorage.setItem('wc_token', accessToken);
+    localStorage.setItem('wc_token_exp', String(Date.now() + 3500*1000));
     try {
       const rows = await sheetsGet(null, SHEETS.USERS);
       const users = parseRows(rows, ['email','role','full_name','status']);
@@ -528,13 +491,12 @@ function LoginPage({ onLogin }) {
         toast('Đăng nhập Admin thành công!', 'success');
       } else {
         setStep('error');
-        setError('Email chưa được cấp quyền. Liên hệ Admin để thêm vào hệ thống.');
+        setError('Email chưa được cấp quyền. Liên hệ Admin để được thêm vào hệ thống.');
       }
     } catch(e) {
-      // Sheets chưa config → vào demo mode nếu là admin
       if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
         onLogin('admin', name, email, picture);
-        toast('Demo mode — chưa điền SPREADSHEET_ID', 'info');
+        toast('Demo mode — điền SPREADSHEET_ID để dùng dữ liệu thật', 'info');
       } else {
         setStep('error');
         setError('Lỗi kết nối Sheets. Kiểm tra API_KEY và SPREADSHEET_ID.');
@@ -542,46 +504,59 @@ function LoginPage({ onLogin }) {
     }
   };
 
-  // Init GSI identity button (không dùng One Tap/FedCM)
-  useEffect(() => {
-    const initBtn = () => {
-      if (!btnRef.current || !window.google?.accounts?.id) return;
-      google.accounts.id.initialize({
+  // This must be called directly from a user click — no async before window.open
+  const handleLogin = () => {
+    setError('');
+    setStep('loading');
+
+    const run = () => {
+      const tc = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
-        callback: (response) => {
-          const payload = decodeJwt(response.credential);
-          if (!payload) { setStep('error'); setError('Không đọc được thông tin tài khoản.'); return; }
-          const email = (payload.email||'').toLowerCase();
-          const name = payload.name || email;
-          const picture = payload.picture || '';
-          setStep('loading');
-          requestSheetsToken(email, name, picture);
+        scope: CONFIG.SCOPES,
+        callback: async (resp) => {
+          if (resp.error) {
+            setStep('error');
+            setError('Google từ chối: ' + (resp.error_description || resp.error));
+            return;
+          }
+          // Get user info
+          try {
+            const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: 'Bearer ' + resp.access_token }
+            });
+            const info = await r.json();
+            await verifyAndLogin(
+              (info.email||'').toLowerCase(),
+              info.name || info.email,
+              info.picture || '',
+              resp.access_token
+            );
+          } catch(e) {
+            setStep('error');
+            setError('Lỗi lấy thông tin tài khoản: ' + e.message);
+          }
         },
-        ux_mode: 'popup',           // popup, không redirect
-        cancel_on_tap_outside: false,
+        error_callback: (err) => {
+          setStep('idle');
+          setError(err.type === 'popup_closed' ? '' : 'Lỗi: ' + (err.message || err.type));
+        },
       });
-      google.accounts.id.renderButton(btnRef.current, {
-        type: 'standard',
-        theme: 'filled_blue',
-        size: 'large',
-        text: 'signin_with',
-        shape: 'rectangular',
-        width: 280,
-        logo_alignment: 'left',
-      });
+      // requestAccessToken phải gọi SYNCHRONOUSLY trong click handler
+      tc.requestAccessToken({ prompt: 'select_account' });
     };
 
-    if (window.google?.accounts?.id) {
-      initBtn();
+    if (window.google?.accounts?.oauth2) {
+      run();
     } else {
+      // Script chưa load — load xong thì báo user click lại (không thể auto-open popup async)
+      setStep('idle');
+      setError('Thư viện Google chưa sẵn sàng. Vui lòng thử lại sau 2 giây.');
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.defer = true;
-      s.onload = initBtn;
+      s.onload = () => setError('');
       document.head.appendChild(s);
     }
-  }, []);
+  };
 
   return (
     <div className="login-page">
@@ -589,23 +564,19 @@ function LoginPage({ onLogin }) {
         <div className="login-logo">WEALTHCONS</div>
         <div className="login-title">Theo Dõi Chi Phí Thuê Thiết Bị</div>
         <div className="login-sub">Hệ thống quản lý chi phí thuê thiết bị xây dựng<br/>tích hợp Google Sheets · 6 dự án · 7 hạng mục</div>
-
         {error && <div className="alert error" style={{marginBottom:16,textAlign:'left'}}><span>✕</span><span>{error}</span></div>}
-
         {step === 'loading' || step === 'verify' ? (
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'13px 20px',background:'rgba(245,158,11,0.1)',borderRadius:8,color:'var(--amber)'}}>
             <div className="spinner"></div>
-            <span>{step==='verify' ? 'Đang xác thực quyền truy cập...' : 'Đang kết nối Google...'}</span>
+            <span>{step==='verify'?'Đang xác thực quyền truy cập...':'Đang kết nối Google...'}</span>
           </div>
         ) : (
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-            {/* Google renders its own button here — no redirect, pure popup */}
-            <div ref={btnRef} style={{minHeight:44,display:'flex',alignItems:'center',justifyContent:'center'}}></div>
-            <div style={{fontSize:11,color:'var(--text3)'}}>Popup Google sẽ mở ra để chọn tài khoản</div>
-          </div>
+          <button className="login-btn" onClick={handleLogin}>
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Đăng nhập bằng Google
+          </button>
         )}
-
-        <div className="login-footer" style={{marginTop:20}}>Chỉ dành cho nhân viên Wealthcons Construction<br/>Phiên bản 1.0 · {new Date().getFullYear()}</div>
+        <div className="login-footer" style={{marginTop:16}}>Chỉ dành cho nhân viên Wealthcons Construction<br/>Phiên bản 1.0 · {new Date().getFullYear()}</div>
       </div>
     </div>
   );
