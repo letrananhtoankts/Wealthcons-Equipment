@@ -263,8 +263,8 @@
 // ============================================================
 const CONFIG = {
   CLIENT_ID: '951533091636-5nkj0kn623qvhf0npl20inlu03hsiepr.apps.googleusercontent.com',
-  API_KEY: 'ĐIỀN_API_KEY_VÀO_ĐÂY',
-  SPREADSHEET_ID: 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY',
+  API_KEY: 'AIzaSyDjmb3AlT_MhvZY-Gyh-hP8dW28O-fVnLw',
+  SPREADSHEET_ID: '1CQA-kbeuokVCroFyROxVoGR0HDOy7imn',
   SCOPES: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
   ADMIN_EMAILS: ['letrananhtoancts@gmail.com'],
 };
@@ -482,64 +482,93 @@ function LoginPage({ onLogin, requestToken, token }) {
   const [error, setError] = useState('');
   const toast = useToast();
 
-  const handleLogin = async () => {
+  // Decode Google JWT credential
+  const decodeJwt = (token) => {
+    try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    catch(e) { return null; }
+  };
+
+  // Verify email against USERS sheet then call onLogin
+  const verifyAndLogin = async (email, name, picture) => {
+    setStep('verify');
+    try {
+      const rows = await sheetsGet(null, SHEETS.USERS);
+      const users = parseRows(rows, ['email','role','full_name','status']);
+      const found = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (found && found.status === 'Active') {
+        onLogin(found.role, found.full_name || name, email, picture);
+        toast('Đăng nhập thành công!', 'success');
+      } else if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
+        onLogin('admin', name, email, picture);
+        toast('Đăng nhập Admin thành công!', 'success');
+      } else {
+        setStep('error');
+        setError('Email này chưa được cấp quyền truy cập. Liên hệ Admin để được thêm vào hệ thống.');
+      }
+    } catch(e) {
+      if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
+        onLogin('admin', name, email, picture);
+        toast('Đăng nhập Admin (demo mode)', 'info');
+      } else {
+        setStep('error');
+        setError('Không kết nối được Sheets. Kiểm tra API_KEY và SPREADSHEET_ID trong config.');
+      }
+    }
+  };
+
+  const handleLogin = () => {
     setStep('gsi');
     setError('');
 
-    // Load GSI identity for user info
-    const gsiScript = document.createElement('script');
-    gsiScript.src = 'https://accounts.google.com/gsi/client';
-    gsiScript.onload = () => {
-      google.accounts.id.initialize({
+    const doLogin = () => {
+      // Use initCodeClient popup — không dùng FedCM/One Tap, tránh bị Chrome block
+      const tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
-        callback: async (response) => {
+        scope: 'openid email profile ' + CONFIG.SCOPES,
+        callback: async (resp) => {
+          if (resp.error) {
+            setStep('error');
+            setError('Google từ chối đăng nhập: ' + (resp.error_description || resp.error));
+            return;
+          }
+          // Get user info from Google API using the access_token
           try {
-            // Decode JWT
-            const payload = JSON.parse(atob(response.credential.split('.')[1]));
-            const email = payload.email?.toLowerCase();
-            const name = payload.name || email;
-            const picture = payload.picture;
-
-            setStep('verify');
-            // Check USERS sheet
-            try {
-              const rows = await sheetsGet(null, SHEETS.USERS);
-              const users = parseRows(rows, ['email','role','full_name','status']);
-              const found = users.find(u => u.email?.toLowerCase() === email);
-
-              if (found && found.status === 'Active') {
-                onLogin(found.role, found.full_name || name, email, picture);
-                toast('Đăng nhập thành công!', 'success');
-              } else if (CONFIG.ADMIN_EMAILS.includes(email)) {
-                onLogin('admin', name, email, picture);
-                toast('Đăng nhập Admin thành công!', 'success');
-              } else {
-                setStep('error');
-                setError('Email này chưa được cấp quyền truy cập. Liên hệ Admin để được thêm vào hệ thống.');
-              }
-            } catch(e) {
-              // If sheets not configured, allow admin fallback
-              if (CONFIG.ADMIN_EMAILS.includes(email)) {
-                onLogin('admin', name, email, picture);
-                toast('Đăng nhập Admin (offline mode)', 'info');
-              } else {
-                setStep('error');
-                setError('Không kết nối được Google Sheets. Kiểm tra cấu hình API_KEY và SPREADSHEET_ID.');
-              }
-            }
+            const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: 'Bearer ' + resp.access_token }
+            });
+            const info = await infoRes.json();
+            const email = (info.email || '').toLowerCase();
+            const name = info.name || email;
+            const picture = info.picture || '';
+            // Store token for Sheets writes
+            localStorage.setItem('wc_token', resp.access_token);
+            localStorage.setItem('wc_token_exp', String(Date.now() + (resp.expires_in * 1000)));
+            await verifyAndLogin(email, name, picture);
           } catch(e) {
             setStep('error');
-            setError('Lỗi xác thực: ' + e.message);
+            setError('Lỗi lấy thông tin tài khoản: ' + e.message);
+          }
+        },
+        error_callback: (err) => {
+          setStep('idle');
+          if (err.type !== 'popup_closed') {
+            setError('Lỗi đăng nhập: ' + (err.message || err.type));
+          } else {
+            setError('');
           }
         },
       });
-      google.accounts.id.prompt();
-      setStep('idle');
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
     };
-    if (!document.querySelector('script[src*="accounts.google.com/gsi"]')) {
-      document.head.appendChild(gsiScript);
+
+    if (window.google?.accounts?.oauth2) {
+      doLogin();
     } else {
-      gsiScript.onload();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = doLogin;
+      s.onerror = () => { setStep('error'); setError('Không tải được thư viện Google Sign-In. Kiểm tra kết nối mạng.'); };
+      document.head.appendChild(s);
     }
   };
 
