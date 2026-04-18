@@ -480,7 +480,8 @@ function LoginPage({ onLogin }) {
     localStorage.setItem('wc_token', accessToken);
     localStorage.setItem('wc_token_exp', String(Date.now() + 3500*1000));
     try {
-      const rows = await sheetsGet(null, SHEETS.USERS);
+      // Dùng accessToken để đọc USERS — không cần Sheets public
+      const rows = await sheetsGet(accessToken, SHEETS.USERS);
       const users = parseRows(rows, ['email','role','full_name','status']);
       const found = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (found && found.status === 'Active') {
@@ -496,10 +497,10 @@ function LoginPage({ onLogin }) {
     } catch(e) {
       if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
         onLogin('admin', name, email, picture);
-        toast('Demo mode — điền SPREADSHEET_ID để dùng dữ liệu thật', 'info');
+        toast('Đăng nhập thành công (admin fallback)!', 'success');
       } else {
         setStep('error');
-        setError('Lỗi kết nối Sheets. Kiểm tra API_KEY và SPREADSHEET_ID.');
+        setError('Lỗi đọc danh sách người dùng: ' + e.message);
       }
     }
   };
