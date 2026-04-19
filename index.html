@@ -1040,7 +1040,7 @@ function Dashboard({ user }) {
           </select>
         </div>
 
-        {/* KPI */}
+        {/* 1. KPI cards */}
         <div className="kpi-grid">
           <div className="kpi-card actual">
             <div className="kpi-label">Chi Phí Thực Tế</div>
@@ -1059,81 +1059,114 @@ function Dashboard({ user }) {
           </div>
         </div>
 
-        {/* Charts */}
-        {projectFilter==='all' && (
-          <div className="chart-grid">
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">Thực tế vs Dự trù vs Đấu thầu</span>
-                <div className="legend">
-                  <span className="legend-item"><span className="legend-dot" style={{background:'#f59e0b'}}></span>Thực tế</span>
-                  <span className="legend-item"><span className="legend-dot" style={{background:'#60a5fa'}}></span>Dự trù</span>
-                  <span className="legend-item"><span className="legend-dot" style={{background:'#a78bfa'}}></span>Đấu thầu</span>
-                </div>
-              </div>
-              <div className="card-body" style={{height:240}}>
-                <BarChart labels={barLabels} datasets={[
-                  {label:'Thực tế',data:barActual,backgroundColor:'rgba(245,158,11,0.8)',borderRadius:4},
-                  {label:'Dự trù',data:barBudget,backgroundColor:'rgba(96,165,250,0.6)',borderRadius:4},
-                  {label:'Đấu thầu',data:barBid,backgroundColor:'rgba(167,139,250,0.5)',borderRadius:4},
-                ]}/>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">Cơ Cấu Chi Phí</span>
-                <div style={{display:'flex',gap:6}}>
-                  <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')}>Hạng mục</button>
-                  <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')}>NCC</button>
-                </div>
-              </div>
-              <div className="card-body" style={{height:240}}>
-                <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
-              </div>
-            </div>
+        {/* 2. Bảng tổng hợp theo dự án — ngay dưới KPI */}
+        <div className="card mb-20">
+          <div className="card-header"><span className="card-title">Tổng Hợp Theo Dự Án</span></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Dự án</th>
+                <th>Địa điểm</th>
+                <th>Trạng thái</th>
+                <th className="text-right">Thực tế</th>
+                <th className="text-right">Dự trù</th>
+                <th className="text-right">Đấu thầu</th>
+                <th className="text-right">% Dự trù</th>
+                <th>Tiến độ</th>
+              </tr></thead>
+              <tbody>
+                {sortedProjects.map(p=>{
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+                  const p2 = fmtPct(pActual,pBudget);
+                  if(pActual===0&&pBudget===0&&pBid===0) return null;
+                  return (
+                    <tr key={p.project_id}>
+                      <td><div style={{fontWeight:600}}>{p.project_name}</div><div style={{fontSize:11,color:'var(--text3)'}}>{p.project_id}</div></td>
+                      <td className="text-muted">{p.location}</td>
+                      <td><span className={`badge ${projectStatusBadge(p.status)}`}>{projectStatusLabel(p.status)}</span></td>
+                      <td className="mono text-right text-amber font-bold">{fmtB(pActual)}</td>
+                      <td className="mono text-right">{fmtB(pBudget)}</td>
+                      <td className="mono text-right">{fmtB(pBid)}</td>
+                      <td className="mono text-right" style={{color:p2>100?'var(--red)':p2>80?'var(--yellow)':'var(--green)'}}>{p2!==null?p2+'%':'—'}</td>
+                      <td style={{width:100}}>
+                        <div className="progress-bar"><div className="progress-fill" style={{width:Math.min(p2||0,100)+'%',background:p2>100?'var(--red)':p2>80?'var(--yellow)':'var(--green)'}}></div></div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="total-row">
+                  <td colSpan={3} style={{fontWeight:700}}>TỔNG CỘNG</td>
+                  <td className="mono text-right font-bold text-amber">{fmtB(totalActual)}</td>
+                  <td className="mono text-right font-bold">{fmtB(totalBudget)}</td>
+                  <td className="mono text-right font-bold">{fmtB(totalBid)}</td>
+                  <td className="mono text-right font-bold" style={{color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
 
-        {projectFilter!=='all' && (
-          <div className="chart-grid">
-            <div className="card">
-              <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
-              <div className="card-body" style={{height:240}}>
-                <LineChart labels={displayMonths.map(monthYear)} datasets={[
-                  {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
-                  {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
-                ]}/>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">Cơ Cấu Chi Phí</span>
-                <div style={{display:'flex',gap:6}}>
-                  <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')}>Hạng mục</button>
-                  <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')}>NCC</button>
-                </div>
-              </div>
-              <div className="card-body" style={{height:240}}>
-                <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Timeline (chỉ hiện khi Tất cả) */}
+        {/* 3. Bar chart (chỉ khi Tất cả) */}
         {projectFilter==='all' && (
           <div className="card mb-20">
-            <div className="card-header"><span className="card-title">Chi Phí Thực Tế Theo Tháng</span></div>
+            <div className="card-header">
+              <span className="card-title">Thực tế vs Dự trù vs Đấu thầu theo Công trình</span>
+              <div className="legend">
+                <span className="legend-item"><span className="legend-dot" style={{background:'#f59e0b'}}></span>Thực tế</span>
+                <span className="legend-item"><span className="legend-dot" style={{background:'#60a5fa'}}></span>Dự trù</span>
+                <span className="legend-item"><span className="legend-dot" style={{background:'#a78bfa'}}></span>Đấu thầu</span>
+              </div>
+            </div>
             <div className="card-body" style={{height:240}}>
-              <LineChart labels={displayMonths.map(monthYear)} datasets={[
-                {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
-                {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+              <BarChart labels={barLabels} datasets={[
+                {label:'Thực tế',data:barActual,backgroundColor:'rgba(245,158,11,0.8)',borderRadius:4},
+                {label:'Dự trù',data:barBudget,backgroundColor:'rgba(96,165,250,0.6)',borderRadius:4},
+                {label:'Đấu thầu',data:barBid,backgroundColor:'rgba(167,139,250,0.5)',borderRadius:4},
               ]}/>
             </div>
           </div>
         )}
 
-        {/* Bảng: Công trình × Hạng mục */}
+        {/* 4. Chi phí theo tháng — 1 hàng full width */}
+        <div className="card mb-20">
+          <div className="card-header"><span className="card-title">Chi Phí Thực Tế Theo Tháng</span></div>
+          <div className="card-body" style={{height:240}}>
+            <LineChart labels={displayMonths.map(monthYear)} datasets={[
+              {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
+              {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+            ]}/>
+          </div>
+        </div>
+
+        {/* 5. 2 Donut song song — không toggle */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}}>
+          <div className="card">
+            <div className="card-header"><span className="card-title">Cơ Cấu Chi Phí — Theo Hạng Mục</span></div>
+            <div className="card-body" style={{height:240}}>
+              <DonutChart
+                labels={categories.map(c=>c.name)}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                colors={COLORS}
+              />
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-title">Cơ Cấu Chi Phí — Theo NCC</span></div>
+            <div className="card-body" style={{height:240}}>
+              {(() => {
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))];
+                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* 6. Bảng chi tiết: Công trình × Hạng mục — cuối cùng */}
         <div className="card">
           <div className="card-header"><span className="card-title">Bảng Chi Tiết Theo Công Trình & Hạng Mục</span></div>
           <div className="table-wrap">
@@ -1202,45 +1235,7 @@ function Dashboard({ user }) {
           ))}
         </div>
 
-        {/* 2 Donut riêng — fix 3 */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
-          {/* Donut 1: Hạng mục */}
-          <div className="card">
-            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo Hạng Mục</div>
-            <div style={{height:160}}>
-              <DonutChart
-                labels={categories.map(c=>c.name)}
-                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
-                colors={COLORS}
-              />
-            </div>
-          </div>
-          {/* Donut 2: NCC */}
-          <div className="card">
-            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo NCC</div>
-            <div style={{height:160}}>
-              {(() => {
-                const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
-                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
-                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
-              })()}
-            </div>
-          </div>
-        </div>
-
-        {/* Timeline mobile */}
-        <div className="card mb-16">
-          <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
-          <div className="card-body" style={{height:180}}>
-            <LineChart labels={displayMonths.map(monthYear)} datasets={[
-              {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
-              {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
-            ]}/>
-          </div>
-        </div>
-
-        {/* Bảng 1: Tổng theo Dự án — fix 2 */}
+        {/* Bảng 1: Tổng theo Dự án — ngay dưới KPI */}
         <div className="card mb-16">
           <div className="card-header"><span className="card-title">Tổng Hợp Theo Dự Án</span></div>
           <div style={{overflowX:'auto'}}>
@@ -1280,8 +1275,44 @@ function Dashboard({ user }) {
             </table>
           </div>
         </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+          {/* Donut 1: Hạng mục */}
+          <div className="card">
+            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo Hạng Mục</div>
+            <div style={{height:160}}>
+              <DonutChart
+                labels={categories.map(c=>c.name)}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                colors={COLORS}
+              />
+            </div>
+          </div>
+          {/* Donut 2: NCC */}
+          <div className="card">
+            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo NCC</div>
+            <div style={{height:160}}>
+              {(() => {
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
+                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+              })()}
+            </div>
+          </div>
+        </div>
 
-        {/* Bảng 2: Dự án × Hạng mục */}
+        {/* Timeline mobile */}
+        <div className="card mb-16">
+          <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
+          <div className="card-body" style={{height:180}}>
+            <LineChart labels={displayMonths.map(monthYear)} datasets={[
+              {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
+              {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+            ]}/>
+          </div>
+        </div>
+
+        {/* 2 Donut riêng — fix 3 */}
         <div className="card">
           <div className="card-header"><span className="card-title">Chi Tiết Dự Án - Hạng Mục</span></div>
           <div style={{overflowX:'auto'}}>
