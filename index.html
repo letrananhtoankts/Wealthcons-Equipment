@@ -38,7 +38,7 @@
   body { font-family: var(--font); background: var(--navy); color: var(--text); min-height: 100vh; font-size: 14px; }
   #root { display: flex; min-height: 100vh; }
 
-  /* SIDEBAR */
+  /* SIDEBAR — Desktop only */
   .sidebar { width: 220px; min-height: 100vh; background: var(--navy2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 100; }
   .sidebar-logo { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
   .logo-mark { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; color: var(--amber); text-transform: uppercase; }
@@ -55,7 +55,7 @@
   .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--amber-dim); border: 1.5px solid var(--amber); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--amber); flex-shrink: 0; }
   .user-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .user-role { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
-  .logout-btn { font-size: 11px; color: var(--text3); cursor: pointer; margin-top: 8px; padding: 4px 0; transition: color 0.15s; }
+  .logout-btn { font-size: 11px; color: var(--text3); cursor: pointer; margin-top: 8px; padding: 4px 0; transition: color 0.15s; background: none; border: none; font-family: var(--font); }
   .logout-btn:hover { color: var(--red); }
 
   /* MAIN */
@@ -65,15 +65,16 @@
   .topbar-meta { font-size: 12px; color: var(--text3); font-family: var(--mono); }
   .content { padding: 24px 28px; flex: 1; }
 
-  /* LOGIN */
-  .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--navy); }
-  .login-card { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: 48px 40px; width: 380px; text-align: center; }
-  .login-logo { font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--amber); text-transform: uppercase; margin-bottom: 8px; }
-  .login-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-  .login-sub { font-size: 13px; color: var(--text3); margin-bottom: 36px; line-height: 1.5; }
+  /* LOGIN — căn giữa hoàn toàn */
+  .login-page { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--navy); z-index: 999; }
+  .login-card { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: 44px 40px; width: 380px; max-width: calc(100vw - 32px); text-align: center; }
+  .login-logo { font-size: 11px; font-weight: 700; letter-spacing: 0.2em; color: var(--amber); text-transform: uppercase; margin-bottom: 10px; }
+  .login-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
+  .login-sub { font-size: 13px; color: var(--text3); margin-bottom: 32px; line-height: 1.6; }
   .login-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 13px 20px; background: var(--amber); color: #0f1b2d; font-family: var(--font); font-size: 14px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
   .login-btn:hover { background: var(--amber2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,158,11,0.3); }
-  .login-footer { margin-top: 24px; font-size: 11px; color: var(--text3); }
+  .login-footer { margin-top: 20px; font-size: 11px; color: var(--text3); line-height: 1.8; }
+  .login-author { font-size: 11px; color: var(--amber); font-weight: 500; margin-top: 4px; }
 
   /* CARDS */
   .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -98,7 +99,6 @@
 
   /* CHART GRID */
   .chart-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-bottom: 20px; }
-  .chart-container { position: relative; width: 100%; }
 
   /* FILTERS */
   .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -171,7 +171,7 @@
   .modal { background: var(--navy2); border: 1px solid var(--border); border-radius: 14px; width: 640px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
   .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .modal-title { font-size: 15px; font-weight: 600; color: var(--text); }
-  .modal-close { color: var(--text3); cursor: pointer; font-size: 20px; line-height: 1; background: none; border: none; color: var(--text3); transition: color 0.12s; }
+  .modal-close { cursor: pointer; font-size: 20px; line-height: 1; background: none; border: none; color: var(--text3); transition: color 0.12s; }
   .modal-close:hover { color: var(--text); }
   .modal-body { padding: 24px; overflow-y: auto; }
   .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
@@ -203,7 +203,6 @@
   .progress-wrap { display: flex; align-items: center; gap: 10px; }
   .progress-bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-  .progress-label { font-size: 11px; font-family: var(--mono); color: var(--text3); width: 42px; text-align: right; }
 
   /* TABS */
   .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
@@ -211,7 +210,7 @@
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--amber); border-bottom-color: var(--amber); }
 
-  /* NOTIFICATION TOAST */
+  /* TOAST */
   .toast-container { position: fixed; top: 70px; right: 20px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
   .toast { background: var(--navy2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-size: 13px; display: flex; align-items: center; gap: 10px; animation: slideIn 0.2s ease; min-width: 280px; }
   .toast.success { border-left: 3px solid var(--green); }
@@ -237,20 +236,51 @@
   .mt-auto { margin-top: auto; }
   .w-full { width: 100%; }
   .text-right { text-align: right; }
-
-  /* CHART LEGEND */
   .legend { display: flex; gap: 16px; flex-wrap: wrap; }
   .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); }
   .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
 
+  /* MOBILE BOTTOM TAB BAR */
+  .mobile-tabbar { display: none; position: fixed; bottom: 0; left: 0; right: 0; height: 60px; background: var(--navy2); border-top: 1px solid var(--border); z-index: 100; flex-direction: row; align-items: stretch; }
+  .mobile-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; color: var(--text3); transition: color 0.15s; font-size: 10px; font-weight: 500; border: none; background: none; font-family: var(--font); }
+  .mobile-tab.active { color: var(--amber); }
+  .mobile-tab-icon { font-size: 20px; line-height: 1; }
+
+  /* MOBILE CARDS (Chi phí list) */
+  .mobile-cost-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .mobile-cost-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .mobile-cost-amount { font-size: 18px; font-weight: 700; color: var(--amber); font-family: var(--mono); }
+  .mobile-cost-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .mobile-cost-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* MOBILE SUMMARY TABLE */
+  .mobile-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mobile-summary-table th { padding: 8px 10px; text-align: left; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border); }
+  .mobile-summary-table td { padding: 9px 10px; border-bottom: 1px solid var(--border2); }
+  .mobile-summary-table tr.total-row td { background: rgba(245,158,11,0.05); font-weight: 700; border-top: 1px solid var(--border); }
+
+  /* MOBILE PROJECT CARD */
+  .mobile-project-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+
   /* RESPONSIVE */
   @media (max-width: 768px) {
-    .sidebar { transform: translateX(-100%); }
-    .main { margin-left: 0; }
-    .kpi-grid { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding-bottom: 60px; }
+    .topbar { padding: 0 16px; }
+    .topbar-meta { display: none; }
+    .content { padding: 16px; }
+    .kpi-grid { grid-template-columns: 1fr; gap: 10px; }
     .chart-grid { grid-template-columns: 1fr; }
     .form-grid.cols2, .form-grid.cols3 { grid-template-columns: 1fr; }
     .line-item { grid-template-columns: 1fr 1fr; }
+    .mobile-tabbar { display: flex; }
+    .toast-container { top: auto; bottom: 70px; right: 12px; left: 12px; }
+    .toast { min-width: unset; }
+    /* Ẩn các nút nhập liệu trên mobile */
+    .desktop-only { display: none !important; }
+  }
+  @media (min-width: 769px) {
+    .mobile-only { display: none !important; }
   }
 </style>
 </head>
@@ -647,11 +677,8 @@ function LoginPage({ onLogin }) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">WEALTHCONS</div>
-        <div className="login-title">Theo Dõi Chi Phí Thuê Thiết Bị</div>
-        <div className="login-sub">
-          Hệ thống quản lý chi phí thuê thiết bị xây dựng<br/>
-          tích hợp Google Sheets · 6 dự án · 7 hạng mục
-        </div>
+        <div className="login-title">Hệ Thống Quản Lý<br/>Chi Phí Thuê Thiết Bị</div>
+        <div className="login-sub">Dành cho nhân viên Wealthcons Construction</div>
 
         {error && (
           <div className="alert error" style={{marginBottom:16,textAlign:'left'}}>
@@ -676,9 +703,9 @@ function LoginPage({ onLogin }) {
           </button>
         )}
 
-        <div className="login-footer" style={{marginTop:16}}>
-          Chỉ dành cho nhân viên Wealthcons Construction<br/>
-          Phiên bản 1.0 · {new Date().getFullYear()}
+        <div className="login-footer">
+          Phiên bản 1.0 · {new Date().getFullYear()}<br/>
+          <span className="login-author">Người phát hành: Lê Trần Anh Toàn</span>
         </div>
       </div>
     </div>
@@ -905,13 +932,23 @@ function LineChart({ labels, datasets }) {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// Helper sort dự án: Active trước, Closed sau
+const sortProjects = (projects) => [
+  ...projects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động'),
+  ...projects.filter(p => p.status !== 'Active' && p.status !== 'Đang hoạt động'),
+];
+
+const projectStatusLabel = (s) => s === 'Active' ? 'Đang hoạt động' : s === 'Closed' ? 'Đã kết thúc' : s;
+const projectStatusBadge = (s) => (s === 'Active' || s === 'Đang hoạt động') ? 'active' : 'closed';
+
 function Dashboard({ user }) {
   const { projects, actuals, bids, budgets, suppliers, categories } = useData();
   const [yearFilter, setYearFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [donutMode, setDonutMode] = useState('cat'); // cat | ncc
+  const [projectFilter, setProjectFilter] = useState('all'); // 'all' hoặc 1 project_id
+  const [donutMode, setDonutMode] = useState('cat');
 
   const years = [...new Set(actuals.map(a => parseMonth(a.month)?.year).filter(Boolean))].sort();
+  const sortedProjects = sortProjects(projects);
 
   const filtered = actuals.filter(a => {
     const p = parseMonth(a.month);
@@ -920,191 +957,334 @@ function Dashboard({ user }) {
     return true;
   });
 
-  const totalActual = filtered.reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
-  
   const activePids = projectFilter === 'all'
-    ? projects.filter(p => p.status === 'Active').map(p => p.project_id)
+    ? projects.map(p => p.project_id) // tất cả dự án
     : [projectFilter];
 
+  const totalActual = filtered.reduce((s,a) => s+(parseFloat(a.amount)||0), 0);
   const totalBid = bids.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_bid)||0), 0);
   const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_budget)||0), 0);
-
   const pct = fmtPct(totalActual, totalBudget);
 
-  // Bar chart by project
-  const activeProjects = projects.filter(p => p.status === 'Active');
-  const barLabels = activeProjects.map(p => p.short_name || p.project_id);
-  const barActual = activeProjects.map(p => filtered.filter(a => a.project_id === p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
-  const barBudget = activeProjects.map(p => budgets.filter(b => b.project_id === p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0));
-  const barBid = activeProjects.map(p => bids.filter(b => b.project_id === p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
+  // Bar chart — chỉ hiện khi chọn "Tất cả"
+  const barProjects = sortedProjects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động');
+  const barLabels = barProjects.map(p => p.short_name || p.project_id);
+  const barActual = barProjects.map(p => actuals.filter(a => a.project_id === p.project_id && (yearFilter==='all'||parseMonth(a.month)?.year===parseInt(yearFilter))).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0));
+  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
 
   // Donut
   const COLORS = ['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#818cf8'];
   let donutLabels, donutData;
   if (donutMode === 'cat') {
     donutLabels = categories.map(c => c.name);
-    donutData = categories.map(c => filtered.filter(a => a.category_code === c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   } else {
-    const sids = [...new Set(filtered.map(a => a.supplier_id))];
-    donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code || sid);
+    const sids = [...new Set(filtered.map(a=>a.supplier_id))];
+    donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
     donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   }
 
   // Timeline
-  const allMonths = [...new Set(actuals.map(a=>a.month))].sort((a,b) => {
-    const pa=parseMonth(a), pb=parseMonth(b);
+  const allMonths = [...new Set(actuals.map(a=>a.month))].sort((a,b)=>{
+    const pa=parseMonth(a),pb=parseMonth(b);
+    if(!pa||!pb) return 0;
     return (pa.year*12+pa.month)-(pb.year*12+pb.month);
   });
-  const displayMonths = allMonths.filter(m => {
-    const p = parseMonth(m);
-    if (yearFilter !== 'all' && p?.year !== parseInt(yearFilter)) return false;
+  const displayMonths = allMonths.filter(m=>{
+    const p=parseMonth(m);
+    if(yearFilter!=='all'&&p?.year!==parseInt(yearFilter)) return false;
     return true;
   });
-  const timelineActual = displayMonths.map(m => filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
-  let cumulative = 0;
-  const timelineCumul = timelineActual.map(v => { cumulative += v; return cumulative; });
+  const timelineActual = displayMonths.map(m=>filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  let cum=0;
+  const timelineCumul = timelineActual.map(v=>{cum+=v;return cum;});
 
-  // Detail table
-  const tableRows = activeProjects.map(p => {
-    const pActual = filtered.filter(a => a.project_id === p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
-    const pBudget = budgets.filter(b => b.project_id === p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
-    const pBid = bids.filter(b => b.project_id === p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
-    const pctVal = fmtPct(pActual, pBudget);
-    return { ...p, pActual, pBudget, pBid, pct: pctVal };
+  // Bảng chi tiết: Công trình × Hạng mục
+  const tableRows = [];
+  const displayedProjects = projectFilter==='all' ? sortedProjects : sortedProjects.filter(p=>p.project_id===projectFilter);
+  displayedProjects.forEach(p => {
+    categories.forEach(c => {
+      const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+      const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+      if (catActual>0||catBudget>0||catBid>0) {
+        tableRows.push({ project_id:p.project_id, project_name:p.project_name, cat_name:c.name, actual:catActual, budget:catBudget, bid:catBid, pct:fmtPct(catActual,catBudget), status:p.status });
+      }
+    });
   });
 
   return (
     <div>
-      <div className="section-header mb-20">
-        <div>
-          <div className="section-title">Dashboard Tổng Quan</div>
-          <div className="section-sub">Chi phí thuê thiết bị — tất cả dự án</div>
+      {/* DESKTOP view */}
+      <div className="desktop-only">
+        <div className="section-header mb-20">
+          <div>
+            <div className="section-title">Dashboard Tổng Quan</div>
+            <div className="section-sub">Chi phí thuê thiết bị — {projectFilter==='all'?'tất cả dự án':projects.find(p=>p.project_id===projectFilter)?.project_name}</div>
+          </div>
         </div>
-        {CONFIG.SPREADSHEET_ID === 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY' && (
-          <div className="badge warn">⚠ Đang dùng dữ liệu mẫu (demo)</div>
-        )}
-      </div>
 
-      {/* Filters */}
-      <div className="filter-bar">
-        <span className="filter-label">Năm</span>
-        <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>setYearFilter('all')}>Tất cả</button>
-        {years.map(y => <button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>setYearFilter(String(y))}>{y}</button>)}
-        <div className="filter-sep" />
-        <span className="filter-label">Công trình</span>
-        <button className={`pill ${projectFilter==='all'?'active':''}`} onClick={()=>setProjectFilter('all')}>Tất cả</button>
-        {projects.filter(p=>p.status==='Active').map(p => (
-          <button key={p.project_id} className={`pill ${projectFilter===p.project_id?'active':''}`} onClick={()=>setProjectFilter(p.project_id)}>{p.short_name||p.project_id}</button>
-        ))}
-      </div>
+        {/* Filters desktop */}
+        <div className="filter-bar">
+          <span className="filter-label">Năm</span>
+          <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>setYearFilter('all')}>Tất cả</button>
+          {years.map(y=><button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>setYearFilter(String(y))}>{y}</button>)}
+          <div className="filter-sep"/>
+          <span className="filter-label">Công trình</span>
+          <select className="select-input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{minWidth:180}}>
+            <option value="all">— Tất cả dự án —</option>
+            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').length>0 && <option disabled>── Đã kết thúc ──</option>}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+          </select>
+        </div>
 
-      {/* KPI */}
-      <div className="kpi-grid">
-        <div className="kpi-card actual">
-          <div className="kpi-label">Chi Phí Thực Tế</div>
-          <div className="kpi-value">{fmtB(totalActual).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-          {pct !== null && <div className={`kpi-diff ${statusBadge(pct)}`}>{pct}% so với dự trù</div>}
+        {/* KPI */}
+        <div className="kpi-grid">
+          <div className="kpi-card actual">
+            <div className="kpi-label">Chi Phí Thực Tế</div>
+            <div className="kpi-value">{fmtB(totalActual).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+            {pct!==null&&<div className={`kpi-diff ${statusBadge(pct)}`}>{pct}% so với dự trù</div>}
+          </div>
+          <div className="kpi-card budget">
+            <div className="kpi-label">Dự Trù Chi Phí</div>
+            <div className="kpi-value">{fmtB(totalBudget).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+            <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Ngân sách nội bộ</div>
+          </div>
+          <div className="kpi-card bid">
+            <div className="kpi-label">Giá Trị Đấu Thầu</div>
+            <div className="kpi-value">{fmtB(totalBid).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+            <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Giá hợp đồng ban đầu</div>
+          </div>
         </div>
-        <div className="kpi-card budget">
-          <div className="kpi-label">Dự Trù Chi Phí</div>
-          <div className="kpi-value">{fmtB(totalBudget).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-          <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Ngân sách nội bộ</div>
-        </div>
-        <div className="kpi-card bid">
-          <div className="kpi-label">Giá Trị Đấu Thầu</div>
-          <div className="kpi-value">{fmtB(totalBid).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-          <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Giá hợp đồng ban đầu</div>
-        </div>
-      </div>
 
-      {/* Charts row 1 */}
-      <div className="chart-grid">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Thực tế vs Dự trù vs Đấu thầu</span>
-            <div className="legend">
-              <span className="legend-item"><span className="legend-dot" style={{background:'#f59e0b'}}></span>Thực tế</span>
-              <span className="legend-item"><span className="legend-dot" style={{background:'#60a5fa'}}></span>Dự trù</span>
-              <span className="legend-item"><span className="legend-dot" style={{background:'#a78bfa'}}></span>Đấu thầu</span>
+        {/* Charts */}
+        {projectFilter==='all' && (
+          <div className="chart-grid">
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">Thực tế vs Dự trù vs Đấu thầu</span>
+                <div className="legend">
+                  <span className="legend-item"><span className="legend-dot" style={{background:'#f59e0b'}}></span>Thực tế</span>
+                  <span className="legend-item"><span className="legend-dot" style={{background:'#60a5fa'}}></span>Dự trù</span>
+                  <span className="legend-item"><span className="legend-dot" style={{background:'#a78bfa'}}></span>Đấu thầu</span>
+                </div>
+              </div>
+              <div className="card-body" style={{height:240}}>
+                <BarChart labels={barLabels} datasets={[
+                  {label:'Thực tế',data:barActual,backgroundColor:'rgba(245,158,11,0.8)',borderRadius:4},
+                  {label:'Dự trù',data:barBudget,backgroundColor:'rgba(96,165,250,0.6)',borderRadius:4},
+                  {label:'Đấu thầu',data:barBid,backgroundColor:'rgba(167,139,250,0.5)',borderRadius:4},
+                ]}/>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">Cơ Cấu Chi Phí</span>
+                <div style={{display:'flex',gap:6}}>
+                  <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')}>Hạng mục</button>
+                  <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')}>NCC</button>
+                </div>
+              </div>
+              <div className="card-body" style={{height:240}}>
+                <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
+              </div>
             </div>
           </div>
-          <div className="card-body" style={{height:240}}>
-            <BarChart labels={barLabels} datasets={[
-              { label: 'Thực tế', data: barActual, backgroundColor: 'rgba(245,158,11,0.8)', borderRadius: 4 },
-              { label: 'Dự trù', data: barBudget, backgroundColor: 'rgba(96,165,250,0.6)', borderRadius: 4 },
-              { label: 'Đấu thầu', data: barBid, backgroundColor: 'rgba(167,139,250,0.5)', borderRadius: 4 },
-            ]} />
+        )}
+
+        {projectFilter!=='all' && (
+          <div className="chart-grid">
+            <div className="card">
+              <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
+              <div className="card-body" style={{height:240}}>
+                <LineChart labels={displayMonths.map(monthYear)} datasets={[
+                  {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
+                  {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+                ]}/>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">Cơ Cấu Chi Phí</span>
+                <div style={{display:'flex',gap:6}}>
+                  <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')}>Hạng mục</button>
+                  <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')}>NCC</button>
+                </div>
+              </div>
+              <div className="card-body" style={{height:240}}>
+                <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Timeline (chỉ hiện khi Tất cả) */}
+        {projectFilter==='all' && (
+          <div className="card mb-20">
+            <div className="card-header"><span className="card-title">Chi Phí Thực Tế Theo Tháng</span></div>
+            <div className="card-body" style={{height:240}}>
+              <LineChart labels={displayMonths.map(monthYear)} datasets={[
+                {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
+                {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+              ]}/>
+            </div>
+          </div>
+        )}
+
+        {/* Bảng: Công trình × Hạng mục */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">Bảng Chi Tiết Theo Công Trình & Hạng Mục</span></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Công trình</th>
+                <th>Hạng mục</th>
+                <th className="text-right">Thực tế</th>
+                <th className="text-right">Dự trù</th>
+                <th className="text-right">Đấu thầu</th>
+                <th className="text-right">% Dự trù</th>
+              </tr></thead>
+              <tbody>
+                {tableRows.length===0 && <tr><td colSpan={6} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
+                {tableRows.map((r,i)=>(
+                  <tr key={i}>
+                    <td><div style={{fontWeight:500,fontSize:12}}>{r.project_name}</div><div style={{fontSize:10,color:'var(--text3)'}}>{r.project_id}</div></td>
+                    <td className="text-sm">{r.cat_name}</td>
+                    <td className="mono text-right text-amber font-bold">{fmtB(r.actual)}</td>
+                    <td className="mono text-right">{fmtB(r.budget)}</td>
+                    <td className="mono text-right">{fmtB(r.bid)}</td>
+                    <td className="mono text-right" style={{color:r.pct>100?'var(--red)':r.pct>80?'var(--yellow)':'var(--green)'}}>{r.pct!==null?r.pct+'%':'—'}</td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <td colSpan={2} style={{fontWeight:700}}>TỔNG CỘNG</td>
+                  <td className="mono text-right font-bold text-amber">{fmtB(totalActual)}</td>
+                  <td className="mono text-right font-bold">{fmtB(totalBudget)}</td>
+                  <td className="mono text-right font-bold">{fmtB(totalBid)}</td>
+                  <td className="mono text-right font-bold" style={{color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-        <div className="card">
+      </div>
+
+      {/* MOBILE view */}
+      <div className="mobile-only">
+        {/* Mobile filters */}
+        <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+          <select className="form-select" style={{flex:1,minWidth:100}} value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+            <option value="all">Tất cả năm</option>
+            {years.map(y=><option key={y} value={String(y)}>{y}</option>)}
+          </select>
+          <select className="form-select" style={{flex:2,minWidth:140}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
+            <option value="all">Tất cả dự án</option>
+            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
+          </select>
+        </div>
+
+        {/* 3 KPI dọc */}
+        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
+          {[
+            {label:'Chi Phí Thực Tế',val:totalActual,cls:'actual',sub:pct!==null?`${pct}% so với dự trù`:null},
+            {label:'Dự Trù Chi Phí',val:totalBudget,cls:'budget',sub:'Ngân sách nội bộ'},
+            {label:'Giá Trị Đấu Thầu',val:totalBid,cls:'bid',sub:'Hợp đồng ban đầu'},
+          ].map(k=>(
+            <div key={k.cls} className={`kpi-card ${k.cls}`} style={{padding:'14px 16px'}}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                <span style={{fontSize:28,fontWeight:700,fontFamily:'var(--mono)',color:'var(--text)'}}>
+                  {fmtB(k.val).replace(' tỷ','')}
+                </span>
+                <span style={{fontSize:13,color:'var(--text3)'}}>tỷ VNĐ</span>
+              </div>
+              {k.sub && <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>{k.sub}</div>}
+            </div>
+          ))}
+        </div>
+
+        {/* Donut */}
+        <div className="card mb-16">
           <div className="card-header">
             <span className="card-title">Cơ Cấu Chi Phí</span>
             <div style={{display:'flex',gap:6}}>
-              <button className={`pill pill-sm ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')}>Hạng mục</button>
-              <button className={`pill pill-sm ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')}>NCC</button>
+              <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')} style={{fontSize:11,padding:'3px 8px'}}>Hạng mục</button>
+              <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')} style={{fontSize:11,padding:'3px 8px'}}>NCC</button>
             </div>
           </div>
-          <div className="card-body" style={{height:240}}>
-            <DonutChart labels={donutLabels} data={donutData} colors={COLORS} />
+          <div className="card-body" style={{height:200}}>
+            <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
           </div>
         </div>
-      </div>
 
-      {/* Timeline */}
-      <div className="card mb-20">
-        <div className="card-header">
-          <span className="card-title">Chi Phí Thực Tế Theo Tháng</span>
+        {/* Timeline mobile */}
+        <div className="card mb-16">
+          <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
+          <div className="card-body" style={{height:180,overflowX:'auto'}}>
+            <LineChart labels={displayMonths.map(monthYear)} datasets={[
+              {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
+              {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
+            ]}/>
+          </div>
         </div>
-        <div className="card-body" style={{height:240}}>
-          <LineChart labels={displayMonths.map(monthYear)} datasets={[
-            { label: 'Thực tế tháng', data: timelineActual, backgroundColor: 'rgba(245,158,11,0.7)', borderRadius: 3, type: 'bar', order: 2 },
-            { label: 'Lũy kế', data: timelineCumul, borderColor: '#60a5fa', backgroundColor: 'transparent', type: 'line', yAxisID: 'y1', tension: 0.3, pointRadius: 2, order: 1 },
-          ]} />
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="card">
-        <div className="card-header"><span className="card-title">Bảng Chi Tiết Theo Công Trình</span></div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Công trình</th>
-              <th>Địa điểm</th>
-              <th className="text-right">Thực tế</th>
-              <th className="text-right">Dự trù</th>
-              <th className="text-right">Đấu thầu</th>
-              <th className="text-right">% Dự trù</th>
-              <th>Tiến độ</th>
-              <th>Trạng thái</th>
-            </tr></thead>
-            <tbody>
-              {tableRows.map(r => (
-                <tr key={r.project_id}>
-                  <td><div style={{fontWeight:500}}>{r.project_name}</div><div style={{fontSize:11,color:'var(--text3)'}}>{r.project_id}</div></td>
-                  <td className="muted">{r.location}</td>
-                  <td className="mono text-right">{fmtB(r.pActual)}</td>
-                  <td className="mono text-right">{fmtB(r.pBudget)}</td>
-                  <td className="mono text-right">{fmtB(r.pBid)}</td>
-                  <td className="mono text-right" style={{color: r.pct>100?'var(--red)':r.pct>80?'var(--yellow)':'var(--green)'}}>{r.pct!==null?r.pct+'%':'—'}</td>
-                  <td style={{width:120}}>
-                    <div className="progress-wrap">
-                      <div className="progress-bar"><div className="progress-fill" style={{width:Math.min(r.pct||0,100)+'%',background:r.pct>100?'var(--red)':r.pct>80?'var(--yellow)':'var(--green)'}}></div></div>
-                    </div>
-                  </td>
-                  <td><span className={`badge ${statusBadge(r.pct)||'ok'}`}>{statusLabel(r.pct)}</span></td>
+        {/* Bảng 1: Tổng tất cả dự án */}
+        <div className="card mb-16">
+          <div className="card-header"><span className="card-title">Tổng Hợp Tất Cả Dự Án</span></div>
+          <div style={{padding:'0 4px'}}>
+            <table className="mobile-summary-table">
+              <thead><tr>
+                <th>CHỈ TIÊU</th>
+                <th style={{textAlign:'right'}}>GIÁ TRỊ</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Chi phí thực tế</td><td style={{textAlign:'right',fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>{fmtB(totalActual)}</td></tr>
+                <tr><td>Dự trù chi phí</td><td style={{textAlign:'right',fontFamily:'var(--mono)'}}>{fmtB(totalBudget)}</td></tr>
+                <tr><td>Giá trị đấu thầu</td><td style={{textAlign:'right',fontFamily:'var(--mono)'}}>{fmtB(totalBid)}</td></tr>
+                <tr className="total-row"><td>Tỉ lệ TT/DT</td><td style={{textAlign:'right',fontFamily:'var(--mono)',color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Bảng 2: Dự án × Hạng mục */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">Chi Tiết Dự Án - Hạng Mục</span></div>
+          <div style={{overflowX:'auto'}}>
+            <table className="mobile-summary-table">
+              <thead><tr>
+                <th>DỰ ÁN</th>
+                <th>HẠNG MỤC</th>
+                <th style={{textAlign:'right'}}>TT</th>
+                <th style={{textAlign:'right'}}>DT</th>
+                <th style={{textAlign:'right'}}>ĐT</th>
+                <th style={{textAlign:'right'}}>%</th>
+              </tr></thead>
+              <tbody>
+                {tableRows.length===0 && <tr><td colSpan={6} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Chưa có dữ liệu</td></tr>}
+                {tableRows.map((r,i)=>(
+                  <tr key={i}>
+                    <td style={{fontSize:11,fontWeight:500}}>{r.project_id}</td>
+                    <td style={{fontSize:11}}>{r.cat_name}</td>
+                    <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:'var(--amber)',fontWeight:700}}>{fmtB(r.actual)}</td>
+                    <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(r.budget)}</td>
+                    <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(r.bid)}</td>
+                    <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:r.pct>100?'var(--red)':r.pct>80?'var(--yellow)':'var(--green)'}}>{r.pct!==null?r.pct+'%':'—'}</td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <td colSpan={2} style={{fontWeight:700,fontSize:11}}>TỔNG</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:'var(--amber)'}}>{fmtB(totalActual)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBudget)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBid)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
                 </tr>
-              ))}
-              <tr className="total-row">
-                <td colSpan={2} style={{fontWeight:600}}>TỔNG CỘNG</td>
-                <td className="mono text-right font-bold text-amber">{fmtB(totalActual)}</td>
-                <td className="mono text-right font-bold">{fmtB(totalBudget)}</td>
-                <td className="mono text-right font-bold">{fmtB(totalBid)}</td>
-                <td className="mono text-right font-bold" style={{color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
-                <td colSpan={2}></td>
-              </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1491,7 +1671,7 @@ function ProjectsPage({ user }) {
           <table>
             <thead><tr><th>Mã DA</th><th>Tên dự án</th><th>Địa điểm</th><th>Khởi công</th><th>Hoàn thành</th><th className="text-right">Giá trị HĐ</th><th>CHT</th><th>Trạng thái</th><th></th></tr></thead>
             <tbody>
-              {projects.map(p => (
+      {sortProjects(projects).map(p => (
                 <tr key={p.project_id}>
                   <td className="mono text-sm font-bold text-amber">{p.project_id}</td>
                   <td style={{fontWeight:500}}>{p.project_name}</td>
@@ -1500,7 +1680,7 @@ function ProjectsPage({ user }) {
                   <td className="mono text-sm">{p.end_date}</td>
                   <td className="mono text-right">{p.contract_value ? fmtB(parseFloat(p.contract_value)) : '—'}</td>
                   <td className="text-sm">{p.pm}</td>
-                  <td><span className={`badge ${p.status==='Active'?'active':'closed'}`}>{p.status}</span></td>
+                  <td><span className={`badge ${projectStatusBadge(p.status)}`}>{projectStatusLabel(p.status)}</span></td>
                   <td>{user.role !== 'viewer' && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(p)}>✏️ Sửa</button>}</td>
                 </tr>
               ))}
@@ -1915,39 +2095,157 @@ function UsersPage({ user }) {
 // ============================================================
 // APP SHELL
 // ============================================================
+// Mobile pages (chỉ xem)
+function MobileActualList() {
+  const { actuals, projects, suppliers, categories } = useData();
+  const [filterPid, setFilterPid] = useState('all');
+  const [filterMonth, setFilterMonth] = useState('');
+  const sortedProjects = sortProjects(projects);
+
+  const filtered = actuals.filter(a => {
+    if (filterPid !== 'all' && a.project_id !== filterPid) return false;
+    if (filterMonth && !a.month.includes(filterMonth)) return false;
+    return true;
+  }).sort((a,b)=>{
+    const pa=parseMonth(a.month),pb=parseMonth(b.month);
+    if(!pa||!pb) return 0;
+    return (pb.year*12+pb.month)-(pa.year*12+pa.month);
+  }).slice(0,50);
+
+  const getProjectName = id => projects.find(p=>p.project_id===id)?.short_name||id;
+  const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code||id;
+  const getCatName = code => categories.find(c=>c.code===code)?.name||code;
+
+  return (
+    <div>
+      <div style={{display:'flex',gap:8,marginBottom:14}}>
+        <select className="form-select" style={{flex:2}} value={filterPid} onChange={e=>setFilterPid(e.target.value)}>
+          <option value="all">Tất cả công trình</option>
+          {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+          {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
+        </select>
+        <input className="form-input" style={{flex:1,maxWidth:100}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} placeholder="MM/YYYY"/>
+      </div>
+      <div style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>{filtered.length} kết quả (tối đa 50)</div>
+      {filtered.map(a=>(
+        <div key={a.cost_id} className="mobile-cost-card">
+          <div className="mobile-cost-header">
+            <div>
+              <div style={{fontWeight:600,fontSize:13}}>{getProjectName(a.project_id)}</div>
+              <div className="mobile-cost-meta">{getSupplierName(a.supplier_id)} · {a.month}</div>
+            </div>
+            <div className="mobile-cost-amount">{fmtB(parseFloat(a.amount))}</div>
+          </div>
+          <div className="mobile-cost-tags">
+            <span className="badge active">{getCatName(a.category_code)}</span>
+            {a.bill_ref && <span className="badge closed">{a.bill_ref}</span>}
+            {a.bill_pdf_url && <a href={a.bill_pdf_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'var(--amber)'}}>📄 PDF</a>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileProjectList() {
+  const { projects } = useData();
+  const sorted = sortProjects(projects);
+  return (
+    <div>
+      {sorted.map(p=>(
+        <div key={p.project_id} className="mobile-project-card">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+            <div style={{fontWeight:600,fontSize:14}}>{p.project_name}</div>
+            <span className={`badge ${projectStatusBadge(p.status)}`}>{projectStatusLabel(p.status)}</span>
+          </div>
+          <div style={{fontSize:12,color:'var(--text3)',marginBottom:4}}>{p.location} · {p.start_date} – {p.end_date}</div>
+          {p.contract_value && <div style={{fontSize:13,color:'var(--amber)',fontFamily:'var(--mono)',fontWeight:600}}>HĐ: {fmtB(parseFloat(p.contract_value))}</div>}
+          {p.pm && <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>CHT: {p.pm}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileAccount({ user, logout }) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'40px 20px',gap:16}}>
+      <div style={{width:72,height:72,borderRadius:'50%',background:'var(--amber-dim)',border:'2px solid var(--amber)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'var(--amber)'}}>
+        {user.initials}
+      </div>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:18,fontWeight:700,color:'var(--text)'}}>{user.name}</div>
+        <div style={{fontSize:12,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.08em',marginTop:4}}>{user.role}</div>
+        <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{user.email}</div>
+      </div>
+      <div style={{width:'100%',background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,padding:'14px 16px'}}>
+        <div style={{fontSize:12,color:'var(--text3)',marginBottom:4}}>Hệ thống</div>
+        <div style={{fontSize:13,color:'var(--text)'}}>Quản Lý Chi Phí Thuê Thiết Bị</div>
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>Wealthcons Construction · v1.0</div>
+      </div>
+      <button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={logout}>
+        Đăng xuất
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
+// APP SHELL
+// ============================================================
 const NAV_ITEMS = [
-  { id:'dashboard', label:'Dashboard', icon:'📊', roles:['admin','editor','viewer'] },
-  { id:'actual', label:'Chi Phí Thực Tế', icon:'📝', roles:['admin','editor'] },
-  { id:'bid', label:'Đấu Thầu', icon:'🏷️', roles:['admin','editor'] },
-  { id:'budget', label:'Dự Trù', icon:'📋', roles:['admin','editor'] },
-  { id:'projects', label:'Dự Án', icon:'🏗️', roles:['admin','editor'] },
-  { id:'suppliers', label:'Nhà Cung Cấp', icon:'🏢', roles:['admin','editor'] },
-  { id:'users', label:'Người Dùng', icon:'👥', roles:['admin'] },
+  { id:'dashboard', label:'Dashboard',        icon:'📊', roles:['admin','editor','viewer'] },
+  { id:'actual',    label:'Chi Phí Thực Tế',  icon:'📝', roles:['admin','editor'] },
+  { id:'bid',       label:'Đấu Thầu',          icon:'🏷️', roles:['admin','editor'] },
+  { id:'budget',    label:'Dự Trù',             icon:'📋', roles:['admin','editor'] },
+  { id:'projects',  label:'Dự Án',              icon:'🏗️', roles:['admin','editor'] },
+  { id:'suppliers', label:'Nhà Cung Cấp',       icon:'🏢', roles:['admin','editor'] },
+  { id:'users',     label:'Người Dùng',          icon:'👥', roles:['admin'] },
+];
+
+const MOBILE_TABS = [
+  { id:'dashboard', label:'Dashboard', icon:'📊' },
+  { id:'actual',    label:'Chi phí',   icon:'📋' },
+  { id:'projects',  label:'Dự án',     icon:'🏗️' },
+  { id:'account',   label:'Tài khoản', icon:'👤' },
 ];
 
 function AppShell({ user, token, logout }) {
   const [page, setPage] = useState('dashboard');
-
   const visibleNav = NAV_ITEMS.filter(n => n.roles.includes(user.role));
 
   const renderPage = () => {
     switch(page) {
       case 'dashboard': return <Dashboard user={user} />;
-      case 'actual': return <ActualCostList user={user} token={token} />;
-      case 'bid': return <BidBudgetPage user={user} mode="bid" />;
-      case 'budget': return <BidBudgetPage user={user} mode="budget" />;
-      case 'projects': return <ProjectsPage user={user} />;
+      case 'actual':    return <ActualCostList user={user} token={token} />;
+      case 'bid':       return <BidBudgetPage user={user} mode="bid" />;
+      case 'budget':    return <BidBudgetPage user={user} mode="budget" />;
+      case 'projects':  return <ProjectsPage user={user} />;
       case 'suppliers': return <SuppliersPage user={user} />;
-      case 'users': return <UsersPage user={user} />;
-      default: return <Dashboard user={user} />;
+      case 'users':     return <UsersPage user={user} />;
+      default:          return <Dashboard user={user} />;
     }
   };
 
-  const currentNav = NAV_ITEMS.find(n=>n.id===page);
+  // Mobile page render (chỉ xem)
+  const renderMobilePage = () => {
+    switch(page) {
+      case 'dashboard': return <Dashboard user={user} />;
+      case 'actual':    return <MobileActualList />;
+      case 'projects':  return <MobileProjectList />;
+      case 'account':   return <MobileAccount user={user} logout={logout} />;
+      default:          return <Dashboard user={user} />;
+    }
+  };
+
+  const currentNav = NAV_ITEMS.find(n=>n.id===page) || { icon:'📊', label:'Dashboard' };
+  const currentMobileTab = MOBILE_TABS.find(t=>t.id===page) || MOBILE_TABS[0];
 
   return (
     <DataProvider user={user} token={token}>
       <div id="app-shell" style={{display:'flex',width:'100%'}}>
+
+        {/* SIDEBAR — Desktop only */}
         <aside className="sidebar">
           <div className="sidebar-logo">
             <div className="logo-mark">WEALTHCONS</div>
@@ -1956,7 +2254,7 @@ function AppShell({ user, token, logout }) {
           <nav className="sidebar-nav">
             <div className="nav-section">
               <div className="nav-label">Menu</div>
-              {visibleNav.map(n => (
+              {visibleNav.map(n=>(
                 <div key={n.id} className={`nav-item ${page===n.id?'active':''}`} onClick={()=>setPage(n.id)}>
                   <span className="icon">{n.icon}</span>
                   <span>{n.label}</span>
@@ -1972,18 +2270,34 @@ function AppShell({ user, token, logout }) {
                 <div className="user-role">{user.role}</div>
               </div>
             </div>
-            <div className="logout-btn" onClick={logout}>← Đăng xuất</div>
+            <button className="logout-btn" onClick={logout}>← Đăng xuất</button>
           </div>
         </aside>
+
+        {/* MAIN */}
         <main className="main">
           <div className="topbar">
-            <div className="topbar-title">{currentNav?.icon} {currentNav?.label}</div>
+            <div className="topbar-title">{currentNav.icon} {currentNav.label}</div>
             <div className="topbar-meta">{new Date().toLocaleDateString('vi-VN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
           </div>
           <div className="content">
-            {renderPage()}
+            {/* Desktop: full page */}
+            <div className="desktop-only">{renderPage()}</div>
+            {/* Mobile: simplified view-only */}
+            <div className="mobile-only">{renderMobilePage()}</div>
           </div>
         </main>
+
+        {/* MOBILE BOTTOM TAB BAR */}
+        <nav className="mobile-tabbar">
+          {MOBILE_TABS.map(t=>(
+            <button key={t.id} className={`mobile-tab ${page===t.id?'active':''}`} onClick={()=>setPage(t.id)}>
+              <span className="mobile-tab-icon">{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+
       </div>
     </DataProvider>
   );
