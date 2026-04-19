@@ -1174,56 +1174,65 @@ function Dashboard({ user }) {
       {/* MOBILE view */}
       <div className="mobile-only">
         {/* Mobile filters */}
-        <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
-          <select className="form-select" style={{flex:1,minWidth:100}} value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <select className="form-select" style={{flex:1}} value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
             <option value="all">Tất cả năm</option>
             {years.map(y=><option key={y} value={String(y)}>{y}</option>)}
           </select>
-          <select className="form-select" style={{flex:2,minWidth:140}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
+          <select className="form-select" style={{flex:2}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
             <option value="all">Tất cả dự án</option>
             {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
           </select>
         </div>
 
-        {/* 3 KPI dọc */}
-        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
+        {/* 3 KPI ngang — fix 1 */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
           {[
-            {label:'Chi Phí Thực Tế',val:totalActual,cls:'actual',sub:pct!==null?`${pct}% so với dự trù`:null},
-            {label:'Dự Trù Chi Phí',val:totalBudget,cls:'budget',sub:'Ngân sách nội bộ'},
-            {label:'Giá Trị Đấu Thầu',val:totalBid,cls:'bid',sub:'Hợp đồng ban đầu'},
+            {label:'Thực Tế',val:totalActual,cls:'actual',color:'var(--amber)',sub:pct!==null?pct+'% DT':null},
+            {label:'Dự Trù',val:totalBudget,cls:'budget',color:'#60a5fa',sub:null},
+            {label:'Đấu Thầu',val:totalBid,cls:'bid',color:'#a78bfa',sub:null},
           ].map(k=>(
-            <div key={k.cls} className={`kpi-card ${k.cls}`} style={{padding:'14px 16px'}}>
-              <div className="kpi-label">{k.label}</div>
-              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
-                <span style={{fontSize:28,fontWeight:700,fontFamily:'var(--mono)',color:'var(--text)'}}>
-                  {fmtB(k.val).replace(' tỷ','')}
-                </span>
-                <span style={{fontSize:13,color:'var(--text3)'}}>tỷ VNĐ</span>
-              </div>
-              {k.sub && <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>{k.sub}</div>}
+            <div key={k.cls} className={`kpi-card ${k.cls}`} style={{padding:'12px 10px',textAlign:'center'}}>
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:'0.06em',color:'var(--text3)',textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
+              <div style={{fontSize:18,fontWeight:700,fontFamily:'var(--mono)',color:k.color,lineHeight:1}}>{fmtB(k.val).replace(' tỷ','')}</div>
+              <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>tỷ VNĐ</div>
+              {k.sub && <div style={{fontSize:10,color:k.color,marginTop:4,fontWeight:600}}>{k.sub}</div>}
             </div>
           ))}
         </div>
 
-        {/* Donut */}
-        <div className="card mb-16">
-          <div className="card-header">
-            <span className="card-title">Cơ Cấu Chi Phí</span>
-            <div style={{display:'flex',gap:6}}>
-              <button className={`pill ${donutMode==='cat'?'active':''}`} onClick={()=>setDonutMode('cat')} style={{fontSize:11,padding:'3px 8px'}}>Hạng mục</button>
-              <button className={`pill ${donutMode==='ncc'?'active':''}`} onClick={()=>setDonutMode('ncc')} style={{fontSize:11,padding:'3px 8px'}}>NCC</button>
+        {/* 2 Donut riêng — fix 3 */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+          {/* Donut 1: Hạng mục */}
+          <div className="card">
+            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo Hạng Mục</div>
+            <div style={{height:160}}>
+              <DonutChart
+                labels={categories.map(c=>c.name)}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                colors={COLORS}
+              />
             </div>
           </div>
-          <div className="card-body" style={{height:200}}>
-            <DonutChart labels={donutLabels} data={donutData} colors={COLORS}/>
+          {/* Donut 2: NCC */}
+          <div className="card">
+            <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo NCC</div>
+            <div style={{height:160}}>
+              {(() => {
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
+                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+              })()}
+            </div>
           </div>
         </div>
 
         {/* Timeline mobile */}
         <div className="card mb-16">
           <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
-          <div className="card-body" style={{height:180,overflowX:'auto'}}>
+          <div className="card-body" style={{height:180}}>
             <LineChart labels={displayMonths.map(monthYear)} datasets={[
               {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
               {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
@@ -1231,20 +1240,42 @@ function Dashboard({ user }) {
           </div>
         </div>
 
-        {/* Bảng 1: Tổng tất cả dự án */}
+        {/* Bảng 1: Tổng theo Dự án — fix 2 */}
         <div className="card mb-16">
-          <div className="card-header"><span className="card-title">Tổng Hợp Tất Cả Dự Án</span></div>
-          <div style={{padding:'0 4px'}}>
+          <div className="card-header"><span className="card-title">Tổng Hợp Theo Dự Án</span></div>
+          <div style={{overflowX:'auto'}}>
             <table className="mobile-summary-table">
               <thead><tr>
-                <th>CHỈ TIÊU</th>
-                <th style={{textAlign:'right'}}>GIÁ TRỊ</th>
+                <th>Dự án</th>
+                <th style={{textAlign:'right'}}>Thực tế</th>
+                <th style={{textAlign:'right'}}>Dự trù</th>
+                <th style={{textAlign:'right'}}>Đấu thầu</th>
+                <th style={{textAlign:'right'}}>Tỉ lệ</th>
               </tr></thead>
               <tbody>
-                <tr><td>Chi phí thực tế</td><td style={{textAlign:'right',fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>{fmtB(totalActual)}</td></tr>
-                <tr><td>Dự trù chi phí</td><td style={{textAlign:'right',fontFamily:'var(--mono)'}}>{fmtB(totalBudget)}</td></tr>
-                <tr><td>Giá trị đấu thầu</td><td style={{textAlign:'right',fontFamily:'var(--mono)'}}>{fmtB(totalBid)}</td></tr>
-                <tr className="total-row"><td>Tỉ lệ TT/DT</td><td style={{textAlign:'right',fontFamily:'var(--mono)',color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td></tr>
+                {sortedProjects.map(p=>{
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+                  const p2 = fmtPct(pActual,pBudget);
+                  if(pActual===0&&pBudget===0&&pBid===0) return null;
+                  return (
+                    <tr key={p.project_id}>
+                      <td style={{fontSize:11,fontWeight:600}}>{p.short_name||p.project_id}</td>
+                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:'var(--amber)',fontWeight:700}}>{fmtB(pActual)}</td>
+                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBudget)}</td>
+                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBid)}</td>
+                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:p2>100?'var(--red)':p2>80?'var(--yellow)':'var(--green)'}}>{p2!==null?p2+'%':'—'}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="total-row">
+                  <td style={{fontWeight:700,fontSize:11}}>TỔNG</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:'var(--amber)'}}>{fmtB(totalActual)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBudget)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBid)}</td>
+                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1256,11 +1287,11 @@ function Dashboard({ user }) {
           <div style={{overflowX:'auto'}}>
             <table className="mobile-summary-table">
               <thead><tr>
-                <th>DỰ ÁN</th>
-                <th>HẠNG MỤC</th>
-                <th style={{textAlign:'right'}}>TT</th>
-                <th style={{textAlign:'right'}}>DT</th>
-                <th style={{textAlign:'right'}}>ĐT</th>
+                <th>Dự án</th>
+                <th>Hạng mục</th>
+                <th style={{textAlign:'right'}}>Thực tế</th>
+                <th style={{textAlign:'right'}}>Dự trù</th>
+                <th style={{textAlign:'right'}}>Đấu thầu</th>
                 <th style={{textAlign:'right'}}>%</th>
               </tr></thead>
               <tbody>
