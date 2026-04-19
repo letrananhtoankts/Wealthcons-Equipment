@@ -269,7 +269,7 @@ const CONFIG = {
   ADMIN_EMAILS: ['letrananhtoan.kts@gmail.com'],
 };
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { code: 'BAOCHE',      name: 'Bao che' },
   { code: 'CHONGSAN',    name: 'Chống sàn' },
   { code: 'CONGTACTAM',  name: 'Công tác tấm' },
@@ -662,148 +662,134 @@ function LoginPage({ onLogin }) {
 const DataContext = React.createContext(null);
 const useData = () => React.useContext(DataContext);
 
+// Tìm số dòng trong sheet theo giá trị cột A (1-indexed, kể cả header)
+const sheetsFindRow = async (token, sheetName, colAValue) => {
+  const rows = await sheetsGet(token, `${sheetName}!A:A`);
+  const idx = rows.findIndex((r, i) => i > 0 && (r[0]||'').toString().trim() === colAValue.toString().trim());
+  return idx === -1 ? -1 : idx + 1; // 1-indexed
+};
+
+// Overwrite một dòng theo row number
+const sheetsOverwriteRow = async (token, sheetName, rowNum, values) => {
+  const range = `${sheetName}!A${rowNum}`;
+  await sheetsUpdate(token, range, [values]);
+};
+
 function DataProvider({ user, token, children }) {
   const [projects, setProjects] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [actuals, setActuals] = useState([]);
   const [bids, setBids] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
   const toast = useToast();
 
   const loadAll = useCallback(async () => {
-    if (CONFIG.SPREADSHEET_ID === 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
-      // Load demo data
-      loadDemo();
-      return;
-    }
     setLoadingData(true);
     try {
-      const [pRows, sRows, aRows, bRows, buRows] = await Promise.all([
+      const [pRows, sRows, aRows, bRows, buRows, cRows] = await Promise.all([
         sheetsGet(token, SHEETS.PROJECTS),
         sheetsGet(token, SHEETS.SUPPLIERS),
         sheetsGet(token, SHEETS.ACTUAL),
         sheetsGet(token, SHEETS.BID),
         sheetsGet(token, SHEETS.BUDGET),
+        sheetsGet(token, 'CATEGORIES!A:E'),
       ]);
       setProjects(parseRows(pRows, ['project_id','project_name','short_name','location','start_date','end_date','contract_value','status','pm','notes']));
       setSuppliers(parseRows(sRows, ['supplier_id','supplier_name','short_code','contact','phone','email','tax_code','categories','bank_account','bank_name','status','notes']));
       setActuals(parseRows(aRows, ['cost_id','project_id','supplier_id','category_code','sub_category','month','amount','bill_ref','bill_pdf_url','input_date','input_by','is_verified','verified_by','notes']));
       setBids(parseRows(bRows, ['project_id','category_code','category_name','bid_amount','quantity','unit','total_bid','updated_by','updated_at','notes']));
       setBudgets(parseRows(buRows, ['project_id','category_code','category_name','budget_amount','quantity','unit','total_budget','updated_by','updated_at','notes']));
+      // Parse categories: cột A=code, cột B=name
+      const cats = (cRows.slice(1)||[]).map(r => ({ code: r[0]||'', name: r[1]||r[0]||'' })).filter(c=>c.code);
+      setCategories(cats.length > 0 ? cats : FALLBACK_CATEGORIES);
       if (user.role === 'admin') {
         const uRows = await sheetsGet(token, SHEETS.USERS);
         setUsers(parseRows(uRows, ['email','role','full_name','status']));
       }
     } catch(e) {
       toast('Lỗi tải dữ liệu: ' + e.message, 'error');
-      loadDemo();
+      setCategories(FALLBACK_CATEGORIES);
     } finally {
       setLoadingData(false);
     }
   }, [token, user]);
 
-  const loadDemo = () => {
-    setProjects([
-      { project_id:'SYCB13', project_name:'Sycamore B13', short_name:'SYCB13', location:'Hà Nội', start_date:'01/2024', end_date:'12/2025', contract_value:'150000000000', status:'Active', pm:'Anh Bách', notes:'' },
-      { project_id:'SISCT', project_name:'SIS Cần Thơ', short_name:'SISCT', location:'Cần Thơ', start_date:'03/2024', end_date:'06/2025', contract_value:'80000000000', status:'Active', pm:'Anh Thiện', notes:'' },
-      { project_id:'THIENHG', project_name:'Thiên Hương', short_name:'THIENHG', location:'TP.HCM', start_date:'06/2023', end_date:'09/2025', contract_value:'120000000000', status:'Active', pm:'Anh Phú', notes:'' },
-      { project_id:'SUNHN', project_name:'Sun Hà Nam', short_name:'SUNHN', location:'Hà Nam', start_date:'01/2024', end_date:'12/2025', contract_value:'95000000000', status:'Active', pm:'Anh Hải', notes:'' },
-      { project_id:'BAINOMHT', project_name:'Bãi Nồm Hà Tĩnh', short_name:'BAINOMHT', location:'Hà Tĩnh', start_date:'09/2023', end_date:'03/2025', contract_value:'60000000000', status:'Active', pm:'Anh Tuấn', notes:'' },
-      { project_id:'SUNCASA', project_name:'Suncasa', short_name:'SUNCASA', location:'—', start_date:'01/2022', end_date:'12/2023', contract_value:'45000000000', status:'Closed', pm:'', notes:'' },
-    ]);
-    setSuppliers([
-      { supplier_id:'TRUONGTHINH', supplier_name:'Công ty TNHH Trường Thịnh', short_code:'TRUONGTHINH', contact:'Nguyễn Văn A', phone:'0901234567', email:'tt@email.com', tax_code:'0123456789', categories:'BAOCHE,CHONGSAN', bank_account:'1234567890', bank_name:'Vietcombank', status:'Active', notes:'NCC lớn nhất' },
-      { supplier_id:'VIETWEE', supplier_name:'Công ty CP Vietwee', short_code:'VIETWEE', contact:'Trần Thị B', phone:'0912345678', email:'vw@email.com', tax_code:'0234567890', categories:'CHONGSAN,CONGTACTAM', bank_account:'2345678901', bank_name:'BIDV', status:'Active', notes:'' },
-      { supplier_id:'HDC', supplier_name:'Công ty TNHH HDC', short_code:'HDC', contact:'Lê Văn C', phone:'0923456789', email:'hdc@email.com', tax_code:'0345678901', categories:'BAOCHE,HAOHUT', bank_account:'3456789012', bank_name:'Techcombank', status:'Active', notes:'' },
-      { supplier_id:'NGOCPHUC', supplier_name:'Công ty CP Ngọc Phúc', short_code:'NGOCPHUC', contact:'Phạm Thị D', phone:'0934567890', email:'np@email.com', tax_code:'0456789012', categories:'CONGTACTAM,VANCHUYEN', bank_account:'4567890123', bank_name:'VPBank', status:'Active', notes:'' },
-      { supplier_id:'VANLOC', supplier_name:'Công ty TNHH Vân Lộc', short_code:'VANLOC', contact:'Hoàng Văn E', phone:'0945678901', email:'vl@email.com', tax_code:'0567890123', categories:'VANCHUYEN', bank_account:'5678901234', bank_name:'MB Bank', status:'Active', notes:'' },
-      { supplier_id:'SUNTECH', supplier_name:'Công ty CP Suntech', short_code:'SUNTECH', contact:'Đỗ Thị F', phone:'0956789012', email:'st@email.com', tax_code:'0678901234', categories:'CHONGSAN,CONGTACTAM', bank_account:'6789012345', bank_name:'ACB', status:'Active', notes:'' },
-    ]);
-    // Demo actuals
-    const demoActuals = [];
-    const months = ['01/2024','02/2024','03/2024','04/2024','05/2024','06/2024','07/2024','08/2024','09/2024','10/2024','11/2024','12/2024','01/2025','02/2025','03/2025'];
-    const pids = ['SYCB13','SISCT','THIENHG','SUNHN','BAINOMHT'];
-    const sids = ['TRUONGTHINH','VIETWEE','HDC','NGOCPHUC','VANLOC'];
-    const cats = ['BAOCHE','CHONGSAN','CONGTACTAM','VANCHUYEN','HAOHUT'];
-    let idx = 1;
-    pids.forEach(pid => {
-      months.forEach(m => {
-        if (Math.random() > 0.4) {
-          const cat = cats[Math.floor(Math.random()*cats.length)];
-          const sid = sids[Math.floor(Math.random()*sids.length)];
-          const amt = Math.round((Math.random()*800+200)*1000000);
-          demoActuals.push({ cost_id:`C-DEMO-${idx++}`, project_id:pid, supplier_id:sid, category_code:cat, sub_category:cat, month:m, amount:String(amt), bill_ref:`BILL-${idx}`, bill_pdf_url:'', input_date:todayStr(), input_by:'Toan', is_verified:'TRUE', verified_by:'Toan', notes:'' });
-        }
-      });
-    });
-    setActuals(demoActuals);
-    // Demo bids & budgets
-    const demoBids = [];
-    const demoBudgets = [];
-    pids.forEach(pid => {
-      cats.forEach(cat => {
-        const bid = Math.round((Math.random()*5+2)*1e9);
-        const bud = Math.round(bid * (0.85 + Math.random()*0.2));
-        demoBids.push({ project_id:pid, category_code:cat, category_name:CATEGORIES.find(c=>c.code===cat)?.name||cat, bid_amount:String(bid), quantity:'1', unit:'Hệ', total_bid:String(bid), updated_by:'Toan', updated_at:todayStr(), notes:'' });
-        demoBudgets.push({ project_id:pid, category_code:cat, category_name:CATEGORIES.find(c=>c.code===cat)?.name||cat, budget_amount:String(bud), quantity:'1', unit:'Hệ', total_budget:String(bud), updated_by:'Toan', updated_at:todayStr(), notes:'' });
-      });
-    });
-    setBids(demoBids);
-    setBudgets(demoBudgets);
-    setUsers([{ email:'letrananhtoancts@gmail.com', role:'admin', full_name:'Lê Trần Anh Toàn', status:'Active' }]);
-  };
-
   useEffect(() => { if (user) loadAll(); }, [user]);
 
+  // ACTUAL COST — append
   const appendActual = async (rows) => {
-    if (CONFIG.SPREADSHEET_ID !== 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
-      await sheetsAppend(token, 'ACTUAL_COST!A:N', rows);
-    }
+    await sheetsAppend(token, 'ACTUAL_COST!A:N', rows);
     const newItems = rows.map(r => ({ cost_id:r[0], project_id:r[1], supplier_id:r[2], category_code:r[3], sub_category:r[4], month:r[5], amount:r[6], bill_ref:r[7], bill_pdf_url:r[8], input_date:r[9], input_by:r[10], is_verified:r[11], verified_by:r[12], notes:r[13] }));
     setActuals(prev => [...prev, ...newItems]);
   };
 
-  const appendProject = async (row) => {
-    if (CONFIG.SPREADSHEET_ID !== 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
+  // PROJECT — append (mới) hoặc overwrite (edit)
+  const saveProject = async (row, isEdit) => {
+    if (isEdit) {
+      const rowNum = await sheetsFindRow(token, 'PROJECTS', row[0]);
+      if (rowNum < 0) throw new Error('Không tìm thấy Mã DA trong sheet');
+      await sheetsOverwriteRow(token, 'PROJECTS', rowNum, row);
+      const p = { project_id:row[0], project_name:row[1], short_name:row[2], location:row[3], start_date:row[4], end_date:row[5], contract_value:row[6], status:row[7], pm:row[8], notes:row[9] };
+      setProjects(prev => prev.map(x => x.project_id === row[0] ? p : x));
+    } else {
       await sheetsAppend(token, 'PROJECTS!A:J', [row]);
+      const p = { project_id:row[0], project_name:row[1], short_name:row[2], location:row[3], start_date:row[4], end_date:row[5], contract_value:row[6], status:row[7], pm:row[8], notes:row[9] };
+      setProjects(prev => [...prev, p]);
     }
-    const p = { project_id:row[0], project_name:row[1], short_name:row[2], location:row[3], start_date:row[4], end_date:row[5], contract_value:row[6], status:row[7], pm:row[8], notes:row[9] };
-    setProjects(prev => [...prev, p]);
   };
 
-  const appendSupplier = async (row) => {
-    if (CONFIG.SPREADSHEET_ID !== 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
+  // SUPPLIER — append (mới) hoặc overwrite (edit)
+  const saveSupplier = async (row, isEdit) => {
+    if (isEdit) {
+      const rowNum = await sheetsFindRow(token, 'SUPPLIERS', row[0]);
+      if (rowNum < 0) throw new Error('Không tìm thấy Mã NCC trong sheet');
+      await sheetsOverwriteRow(token, 'SUPPLIERS', rowNum, row);
+      const s = { supplier_id:row[0], supplier_name:row[1], short_code:row[2], contact:row[3], phone:row[4], email:row[5], tax_code:row[6], categories:row[7], bank_account:row[8], bank_name:row[9], status:row[10], notes:row[11] };
+      setSuppliers(prev => prev.map(x => x.supplier_id === row[0] ? s : x));
+    } else {
       await sheetsAppend(token, 'SUPPLIERS!A:L', [row]);
+      const s = { supplier_id:row[0], supplier_name:row[1], short_code:row[2], contact:row[3], phone:row[4], email:row[5], tax_code:row[6], categories:row[7], bank_account:row[8], bank_name:row[9], status:row[10], notes:row[11] };
+      setSuppliers(prev => [...prev, s]);
     }
-    const s = { supplier_id:row[0], supplier_name:row[1], short_code:row[2], contact:row[3], phone:row[4], email:row[5], tax_code:row[6], categories:row[7], bank_account:row[8], bank_name:row[9], status:row[10], notes:row[11] };
-    setSuppliers(prev => [...prev, s]);
   };
 
+  // USER — append
   const appendUser = async (row) => {
-    if (CONFIG.SPREADSHEET_ID !== 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
-      await sheetsAppend(token, 'USERS!A:D', [row]);
-    }
+    await sheetsAppend(token, 'USERS!A:D', [row]);
     const u = { email:row[0], role:row[1], full_name:row[2], status:row[3] };
     setUsers(prev => [...prev, u]);
   };
 
-  const saveBidBudget = async (sheet, rows, setFn, fields, pid) => {
-    if (CONFIG.SPREADSHEET_ID !== 'ĐIỀN_SPREADSHEET_ID_VÀO_ĐÂY') {
-      await sheetsAppend(token, `${sheet}!A:J`, rows);
+  // BID/BUDGET — xóa tất cả dòng cũ theo project_id rồi append mới
+  // Vì Sheets API không có delete row dễ, ta dùng cách: load lại tất cả, lọc bỏ pid cũ, ghi lại toàn bộ
+  const overwriteBidBudget = async (sheetName, pid, newRows, isB) => {
+    // Load toàn bộ sheet hiện tại
+    const allRows = await sheetsGet(token, `${sheetName}!A:J`);
+    if (!allRows || allRows.length === 0) {
+      await sheetsAppend(token, `${sheetName}!A:J`, newRows);
+      return;
     }
-    setFn(prev => {
-      const filtered = prev.filter(x => x.project_id !== pid);
-      const newItems = rows.map(r => {
-        const obj = {}; fields.forEach((f,i) => obj[f]=r[i]||''); return obj;
-      });
-      return [...filtered, ...newItems];
-    });
+    const header = allRows[0];
+    const dataRows = allRows.slice(1).filter(r => (r[0]||'') !== pid); // giữ các dự án khác
+    const combined = [header, ...dataRows, ...newRows];
+    // Clear toàn bộ sheet rồi ghi lại
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}:clear`;
+    await fetch(clearUrl, { method:'POST', headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' } });
+    await sheetsUpdate(token, `${sheetName}!A1`, combined);
+    // Update state
+    const fields = isB
+      ? ['project_id','category_code','category_name','bid_amount','quantity','unit','total_bid','updated_by','updated_at','notes']
+      : ['project_id','category_code','category_name','budget_amount','quantity','unit','total_budget','updated_by','updated_at','notes'];
+    const newItems = newRows.map(r => { const obj={}; fields.forEach((f,i) => obj[f]=r[i]||''); return obj; });
+    if (isB) setBids(prev => [...prev.filter(x=>x.project_id!==pid), ...newItems]);
+    else setBudgets(prev => [...prev.filter(x=>x.project_id!==pid), ...newItems]);
   };
 
   return (
-    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, users, loadingData, loadAll, appendActual, appendProject, appendSupplier, appendUser, saveBidBudget, setBids, setBudgets }}>
+    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, categories, users, loadingData, loadAll, appendActual, saveProject, saveSupplier, appendUser, overwriteBidBudget }}>
       {children}
     </DataContext.Provider>
   );
@@ -882,7 +868,7 @@ function LineChart({ labels, datasets }) {
 // DASHBOARD
 // ============================================================
 function Dashboard({ user }) {
-  const { projects, actuals, bids, budgets } = useData();
+  const { projects, actuals, bids, budgets, suppliers, categories } = useData();
   const [yearFilter, setYearFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [donutMode, setDonutMode] = useState('cat'); // cat | ncc
@@ -918,14 +904,13 @@ function Dashboard({ user }) {
   const COLORS = ['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#818cf8'];
   let donutLabels, donutData;
   if (donutMode === 'cat') {
-    donutLabels = CATEGORIES.map(c => c.name);
-    donutData = CATEGORIES.map(c => filtered.filter(a => a.category_code === c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutLabels = categories.map(c => c.name);
+    donutData = categories.map(c => filtered.filter(a => a.category_code === c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   } else {
     const sids = [...new Set(filtered.map(a => a.supplier_id))];
     donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code || sid);
     donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   }
-  const { suppliers } = useData();
 
   // Timeline
   const allMonths = [...new Set(actuals.map(a=>a.month))].sort((a,b) => {
@@ -1092,7 +1077,7 @@ function Dashboard({ user }) {
 // NHẬP CHI PHÍ THỰC TẾ
 // ============================================================
 function ActualCostForm({ user, token, onClose }) {
-  const { projects, suppliers, appendActual } = useData();
+  const { projects, suppliers, appendActual, categories } = useData();
   const toast = useToast();
   const [form, setForm] = useState({ project_id:'', supplier_id:'', month: nowMonth(), bill_ref:'', bill_pdf_url:'' });
   const [lines, setLines] = useState([{ category_code:'', amount:'', notes:'' }]);
@@ -1215,7 +1200,7 @@ function ActualCostForm({ user, token, onClose }) {
                 <div>
                   <select className={`form-select ${errors[`cat_${i}`]?'error':''}`} value={l.category_code} onChange={e=>setLine(i,'category_code',e.target.value)}>
                     <option value="">— Chọn —</option>
-                    {CATEGORIES.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
+                    {categories.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
                   </select>
                   {errors[`cat_${i}`] && <span className="form-error">{errors[`cat_${i}`]}</span>}
                 </div>
@@ -1252,7 +1237,7 @@ function ActualCostForm({ user, token, onClose }) {
 // DANH SÁCH CHI PHÍ THỰC TẾ
 // ============================================================
 function ActualCostList({ user, token }) {
-  const { actuals, projects, suppliers } = useData();
+  const { actuals, projects, suppliers, categories } = useData();
   const [showForm, setShowForm] = useState(false);
   const [filterPid, setFilterPid] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
@@ -1267,6 +1252,7 @@ function ActualCostList({ user, token }) {
     return true;
   }).sort((a,b) => {
     const pa=parseMonth(a.month), pb=parseMonth(b.month);
+    if (!pa || !pb) return 0;
     return (pb.year*12+pb.month)-(pa.year*12+pa.month);
   });
 
@@ -1276,7 +1262,7 @@ function ActualCostList({ user, token }) {
 
   const getProjectName = id => projects.find(p=>p.project_id===id)?.short_name || id;
   const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code || id;
-  const getCatName = code => CATEGORIES.find(c=>c.code===code)?.name || code;
+  const getCatName = code => categories.find(c=>c.code===code)?.name || code;
 
   return (
     <div>
@@ -1303,7 +1289,7 @@ function ActualCostList({ user, token }) {
             <div className="form-group" style={{margin:0,minWidth:140}}>
               <select className="form-select" value={filterCat} onChange={e=>{setFilterCat(e.target.value);setPage(1);}}>
                 <option value="all">Tất cả hạng mục</option>
-                {CATEGORIES.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
+                {categories.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group" style={{margin:0}}>
@@ -1365,22 +1351,30 @@ function ActualCostList({ user, token }) {
 // ============================================================
 // DỰ ÁN
 // ============================================================
-function ProjectsPage({ user, token }) {
-  const { projects, appendProject } = useData();
+function ProjectsPage({ user }) {
+  const { projects, saveProject } = useData();
   const toast = useToast();
+  const emptyForm = { project_id:'', project_name:'', short_name:'', location:'', start_date:'', end_date:'', contract_value:'', status:'Active', pm:'', notes:'' };
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ project_id:'', project_name:'', short_name:'', location:'', start_date:'', end_date:'', contract_value:'', status:'Active', pm:'', notes:'' });
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const openAdd = () => { setForm(emptyForm); setEditMode(false); setShowForm(true); };
+  const openEdit = (p) => {
+    setForm({ ...p, contract_value: p.contract_value ? fmt(parseFloat(p.contract_value)) : '' });
+    setEditMode(true); setShowForm(true);
+  };
 
   const handleSave = async () => {
     if (!form.project_id || !form.project_name) { toast('Vui lòng điền Mã DA và Tên dự án', 'error'); return; }
     setSaving(true);
     try {
-      await appendProject([form.project_id,form.project_name,form.short_name||form.project_id,form.location,form.start_date,form.end_date,form.contract_value.replace(/\D/g,''),form.status,form.pm,form.notes]);
-      toast('Đã thêm dự án!', 'success');
+      const row = [form.project_id, form.project_name, form.short_name||form.project_id, form.location, form.start_date, form.end_date, (form.contract_value||'').replace(/\D/g,''), form.status, form.pm, form.notes];
+      await saveProject(row, editMode);
+      toast(editMode ? 'Đã cập nhật dự án!' : 'Đã thêm dự án!', 'success');
       setShowForm(false);
-      setForm({ project_id:'', project_name:'', short_name:'', location:'', start_date:'', end_date:'', contract_value:'', status:'Active', pm:'', notes:'' });
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
   };
 
@@ -1388,12 +1382,12 @@ function ProjectsPage({ user, token }) {
     <div>
       <div className="section-header mb-20">
         <div><div className="section-title">Quản Lý Dự Án</div><div className="section-sub">{projects.length} dự án</div></div>
-        {user.role !== 'viewer' && <button className="btn btn-primary" onClick={()=>setShowForm(true)}>+ Thêm Dự Án</button>}
+        {user.role !== 'viewer' && <button className="btn btn-primary" onClick={openAdd}>+ Thêm Dự Án</button>}
       </div>
       <div className="card">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Mã DA</th><th>Tên dự án</th><th>Địa điểm</th><th>Khởi công</th><th>Hoàn thành</th><th className="text-right">Giá trị HĐ</th><th>CHT</th><th>Trạng thái</th></tr></thead>
+            <thead><tr><th>Mã DA</th><th>Tên dự án</th><th>Địa điểm</th><th>Khởi công</th><th>Hoàn thành</th><th className="text-right">Giá trị HĐ</th><th>CHT</th><th>Trạng thái</th><th></th></tr></thead>
             <tbody>
               {projects.map(p => (
                 <tr key={p.project_id}>
@@ -1405,6 +1399,7 @@ function ProjectsPage({ user, token }) {
                   <td className="mono text-right">{p.contract_value ? fmtB(parseFloat(p.contract_value)) : '—'}</td>
                   <td className="text-sm">{p.pm}</td>
                   <td><span className={`badge ${p.status==='Active'?'active':'closed'}`}>{p.status}</span></td>
+                  <td>{user.role !== 'viewer' && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(p)}>✏️ Sửa</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -1414,18 +1409,21 @@ function ProjectsPage({ user, token }) {
       {showForm && (
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
           <div className="modal">
-            <div className="modal-header"><span className="modal-title">Thêm Dự Án Mới</span><button className="modal-close" onClick={()=>setShowForm(false)}>×</button></div>
+            <div className="modal-header">
+              <span className="modal-title">{editMode?'✏️ Chỉnh sửa Dự Án':'+ Thêm Dự Án Mới'}</span>
+              <button className="modal-close" onClick={()=>setShowForm(false)}>×</button>
+            </div>
             <div className="modal-body">
               <div className="form-grid cols2">
-                <div className="form-group"><label className="form-label required">Mã DA</label><input className="form-input" value={form.project_id} onChange={e=>set('project_id',e.target.value.toUpperCase().replace(/\s/g,''))} placeholder="SYCB13" /><span className="form-hint">Viết hoa, không dấu, không space</span></div>
-                <div className="form-group"><label className="form-label required">Tên dự án</label><input className="form-input" value={form.project_name} onChange={e=>set('project_name',e.target.value)} placeholder="Sycamore B13" /></div>
-                <div className="form-group"><label className="form-label">Tên viết tắt</label><input className="form-input" value={form.short_name} onChange={e=>set('short_name',e.target.value)} placeholder="SYCB13" /></div>
-                <div className="form-group"><label className="form-label">Địa điểm</label><input className="form-input" value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Hà Nội" /></div>
+                <div className="form-group"><label className="form-label required">Mã DA</label><input className="form-input" value={form.project_id} onChange={e=>set('project_id',e.target.value.toUpperCase().replace(/\s/g,''))} placeholder="SYCB13" disabled={editMode} style={editMode?{opacity:0.6}:{}} />{editMode&&<span className="form-hint">Mã DA không thể thay đổi</span>}</div>
+                <div className="form-group"><label className="form-label required">Tên dự án</label><input className="form-input" value={form.project_name} onChange={e=>set('project_name',e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Tên viết tắt</label><input className="form-input" value={form.short_name} onChange={e=>set('short_name',e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Địa điểm</label><input className="form-input" value={form.location} onChange={e=>set('location',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Ngày khởi công</label><input className="form-input" value={form.start_date} onChange={e=>set('start_date',e.target.value)} placeholder="MM/YYYY" /></div>
                 <div className="form-group"><label className="form-label">Ngày hoàn thành</label><input className="form-input" value={form.end_date} onChange={e=>set('end_date',e.target.value)} placeholder="MM/YYYY" /></div>
-                <div className="form-group"><label className="form-label">Giá trị HĐ (VNĐ)</label><input className="form-input" value={form.contract_value} onChange={e=>set('contract_value',e.target.value)} placeholder="120000000000" /></div>
+                <div className="form-group"><label className="form-label">Giá trị HĐ (VNĐ)</label><input className="form-input" value={form.contract_value} onChange={e=>set('contract_value',e.target.value)} placeholder="120.000.000.000" /></div>
                 <div className="form-group"><label className="form-label">Trạng thái</label><select className="form-select" value={form.status} onChange={e=>set('status',e.target.value)}><option value="Active">Active</option><option value="Closed">Closed</option><option value="On Hold">On Hold</option></select></div>
-                <div className="form-group"><label className="form-label">Chỉ huy trưởng</label><input className="form-input" value={form.pm} onChange={e=>set('pm',e.target.value)} placeholder="Nguyễn Văn A" /></div>
+                <div className="form-group"><label className="form-label">Chỉ huy trưởng</label><input className="form-input" value={form.pm} onChange={e=>set('pm',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-input" value={form.notes} onChange={e=>set('notes',e.target.value)} /></div>
               </div>
             </div>
@@ -1444,36 +1442,47 @@ function ProjectsPage({ user, token }) {
 // NHÀ CUNG CẤP
 // ============================================================
 function SuppliersPage({ user }) {
-  const { suppliers, appendSupplier } = useData();
+  const { suppliers, saveSupplier, categories } = useData();
   const toast = useToast();
+  const emptyForm = { supplier_id:'', supplier_name:'', short_code:'', contact:'', phone:'', email:'', tax_code:'', bank_account:'', bank_name:'', status:'Active', notes:'' };
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ supplier_id:'', supplier_name:'', short_code:'', contact:'', phone:'', email:'', tax_code:'', categories:'', bank_account:'', bank_name:'', status:'Active', notes:'' });
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [selectedCats, setSelectedCats] = useState([]);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  const [selectedCats, setSelectedCats] = useState([]);
   const toggleCat = (code) => setSelectedCats(prev => prev.includes(code)?prev.filter(c=>c!==code):[...prev,code]);
+
+  const openAdd = () => { setForm(emptyForm); setSelectedCats([]); setEditMode(false); setShowForm(true); };
+  const openEdit = (s) => {
+    setForm(s);
+    setSelectedCats((s.categories||'').split(',').filter(Boolean));
+    setEditMode(true); setShowForm(true);
+  };
 
   const handleSave = async () => {
     if (!form.supplier_id || !form.supplier_name) { toast('Vui lòng điền Mã NCC và Tên NCC', 'error'); return; }
     setSaving(true);
     try {
-      const row = [form.supplier_id,form.supplier_name,form.short_code||form.supplier_id,form.contact,form.phone,form.email,form.tax_code,selectedCats.join(','),form.bank_account,form.bank_name,form.status,form.notes];
-      await appendSupplier(row);
-      toast('Đã thêm NCC!', 'success');
+      const row = [form.supplier_id, form.supplier_name, form.short_code||form.supplier_id, form.contact, form.phone, form.email, form.tax_code, selectedCats.join(','), form.bank_account, form.bank_name, form.status, form.notes];
+      await saveSupplier(row, editMode);
+      toast(editMode ? 'Đã cập nhật NCC!' : 'Đã thêm NCC!', 'success');
       setShowForm(false);
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
   };
+
+  const getCatName = code => categories.find(c=>c.code===code)?.name || code;
 
   return (
     <div>
       <div className="section-header mb-20">
         <div><div className="section-title">Quản Lý Nhà Cung Cấp</div><div className="section-sub">{suppliers.filter(s=>s.status==='Active').length} đang hoạt động</div></div>
-        {user.role === 'admin' && <button className="btn btn-primary" onClick={()=>setShowForm(true)}>+ Thêm NCC</button>}
+        {user.role === 'admin' && <button className="btn btn-primary" onClick={openAdd}>+ Thêm NCC</button>}
       </div>
       <div className="card">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Mã NCC</th><th>Tên công ty</th><th>Liên hệ</th><th>SĐT</th><th>Hạng mục</th><th>Ngân hàng</th><th>Trạng thái</th></tr></thead>
+            <thead><tr><th>Mã NCC</th><th>Tên công ty</th><th>Liên hệ</th><th>SĐT</th><th>Hạng mục</th><th>Ngân hàng</th><th>Trạng thái</th><th></th></tr></thead>
             <tbody>
               {suppliers.map(s => (
                 <tr key={s.supplier_id}>
@@ -1482,10 +1491,11 @@ function SuppliersPage({ user }) {
                   <td className="text-sm">{s.contact}</td>
                   <td className="mono text-sm">{s.phone}</td>
                   <td style={{maxWidth:200}}>
-                    {(s.categories||'').split(',').filter(Boolean).map(c => <span key={c} className="badge active" style={{marginRight:4,marginBottom:2}}>{CATEGORIES.find(x=>x.code===c)?.name||c}</span>)}
+                    {(s.categories||'').split(',').filter(Boolean).map(c=><span key={c} className="badge active" style={{marginRight:4,marginBottom:2}}>{getCatName(c)}</span>)}
                   </td>
-                  <td className="text-sm text-muted">{s.bank_name} {s.bank_account?`· ${s.bank_account}`:''}</td>
+                  <td className="text-sm text-muted">{s.bank_name}{s.bank_account?` · ${s.bank_account}`:''}</td>
                   <td><span className={`badge ${s.status==='Active'?'active':'closed'}`}>{s.status}</span></td>
+                  <td>{user.role==='admin' && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(s)}>✏️ Sửa</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -1495,10 +1505,13 @@ function SuppliersPage({ user }) {
       {showForm && (
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
           <div className="modal" style={{width:700}}>
-            <div className="modal-header"><span className="modal-title">Thêm Nhà Cung Cấp</span><button className="modal-close" onClick={()=>setShowForm(false)}>×</button></div>
+            <div className="modal-header">
+              <span className="modal-title">{editMode?'✏️ Chỉnh sửa NCC':'+ Thêm Nhà Cung Cấp'}</span>
+              <button className="modal-close" onClick={()=>setShowForm(false)}>×</button>
+            </div>
             <div className="modal-body">
               <div className="form-grid cols2">
-                <div className="form-group"><label className="form-label required">Mã NCC</label><input className="form-input" value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value.toUpperCase().replace(/\s/g,''))} placeholder="TRUONGTHINH" /></div>
+                <div className="form-group"><label className="form-label required">Mã NCC</label><input className="form-input" value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value.toUpperCase().replace(/\s/g,''))} disabled={editMode} style={editMode?{opacity:0.6}:{}} />{editMode&&<span className="form-hint">Mã NCC không thể thay đổi</span>}</div>
                 <div className="form-group"><label className="form-label required">Tên công ty</label><input className="form-input" value={form.supplier_name} onChange={e=>set('supplier_name',e.target.value)} placeholder="Công ty TNHH ..." /></div>
                 <div className="form-group"><label className="form-label">Người liên hệ</label><input className="form-input" value={form.contact} onChange={e=>set('contact',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Số điện thoại</label><input className="form-input" value={form.phone} onChange={e=>set('phone',e.target.value)} /></div>
@@ -1510,14 +1523,16 @@ function SuppliersPage({ user }) {
               <div className="form-group" style={{marginTop:12}}>
                 <label className="form-label">Hạng mục cung ứng</label>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
-                  {CATEGORIES.map(c => (
-                    <button key={c.code} className={`pill ${selectedCats.includes(c.code)?'active':''}`} onClick={()=>toggleCat(c.code)}>{c.name}</button>
-                  ))}
+                  {categories.map(c=><button key={c.code} className={`pill ${selectedCats.includes(c.code)?'active':''}`} onClick={()=>toggleCat(c.code)}>{c.name}</button>)}
                 </div>
               </div>
               <div className="form-group" style={{marginTop:12}}>
                 <label className="form-label">Trạng thái</label>
                 <select className="form-select" style={{width:200}} value={form.status} onChange={e=>set('status',e.target.value)}><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+              </div>
+              <div className="form-group" style={{marginTop:12}}>
+                <label className="form-label">Ghi chú</label>
+                <input className="form-input" value={form.notes||''} onChange={e=>set('notes',e.target.value)} />
               </div>
             </div>
             <div className="modal-footer">
@@ -1535,12 +1550,12 @@ function SuppliersPage({ user }) {
 // ĐẤU THẦU / DỰ TRÙ
 // ============================================================
 function BidBudgetPage({ user, mode }) {
-  // mode: 'bid' | 'budget'
-  const { projects, bids, budgets, saveBidBudget, setBids, setBudgets } = useData();
+  const { projects, bids, budgets, categories, overwriteBidBudget } = useData();
   const toast = useToast();
   const [selectedPid, setSelectedPid] = useState('');
   const [lines, setLines] = useState({});
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // list | form
   const isB = mode === 'bid';
   const source = isB ? bids : budgets;
   const SHEET = isB ? 'BID_COST' : 'BUDGET';
@@ -1548,96 +1563,171 @@ function BidBudgetPage({ user, mode }) {
   const totField = isB ? 'total_bid' : 'total_budget';
   const title = isB ? 'Chi Phí Đấu Thầu' : 'Dự Trù Chi Phí';
 
-  useEffect(() => {
-    if (!selectedPid) return;
+  // Khi chọn dự án để nhập/sửa → load dữ liệu hiện có vào form
+  const openForm = (pid) => {
+    setSelectedPid(pid);
     const existing = {};
-    source.filter(b=>b.project_id===selectedPid).forEach(b => {
-      existing[b.category_code] = { amount: fmt(parseFloat(b[amtField])), unit: b.unit||'Hệ', notes: b.notes||'' };
+    source.filter(b=>b.project_id===pid).forEach(b => {
+      existing[b.category_code] = { amount: b[amtField] ? parseInt(b[amtField]).toLocaleString('vi-VN') : '', unit: b.unit||'Hệ', notes: b.notes||'' };
     });
     const init = {};
-    CATEGORIES.forEach(c => {
+    categories.forEach(c => {
       init[c.code] = existing[c.code] || { amount:'', unit:'Hệ', notes:'' };
     });
     setLines(init);
-  }, [selectedPid, mode]);
+    setViewMode('form');
+  };
 
   const setLine = (code, k, v) => setLines(l => ({...l, [code]: {...l[code],[k]:v}}));
   const formatAmt = v => { const n=v.replace(/\D/g,''); return n?parseInt(n).toLocaleString('vi-VN'):''; };
 
   const handleSave = async () => {
-    if (!selectedPid) { toast('Chọn công trình trước', 'error'); return; }
     setSaving(true);
     try {
-      const rows = CATEGORIES.map(c => {
+      const rows = categories.map(c => {
         const l = lines[c.code]||{};
         const amt = parseFloat((l.amount||'').replace(/\./g,''))||0;
-        return [selectedPid,c.code,c.name,String(amt),1,l.unit||'Hệ',String(amt),user.name,todayStr(),l.notes||''];
+        return [selectedPid, c.code, c.name, String(amt), 1, l.unit||'Hệ', String(amt), user.name, todayStr(), l.notes||''];
       }).filter(r => parseFloat(r[3]) > 0);
-      const fields = ['project_id','category_code','category_name',amtField,'quantity','unit',totField,'updated_by','updated_at','notes'];
-      const setFn = isB ? setBids : setBudgets;
-      await saveBidBudget(SHEET, rows, setFn, fields, selectedPid);
+      await overwriteBidBudget(SHEET, selectedPid, rows, isB);
       toast(`Đã lưu ${title} cho ${selectedPid}!`, 'success');
+      setViewMode('list');
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
   };
 
   const total = Object.values(lines).reduce((s,l) => s+(parseFloat((l.amount||'').replace(/\./g,''))||0), 0);
 
+  // Tổng hợp theo dự án cho danh sách
+  const summaryByProject = projects.map(p => {
+    const rows = source.filter(b=>b.project_id===p.project_id);
+    const total = rows.reduce((s,b)=>s+(parseFloat(b[totField])||0), 0);
+    return { ...p, total, rowCount: rows.length };
+  }).filter(p => p.rowCount > 0);
+
   return (
     <div>
       <div className="section-header mb-20">
-        <div><div className="section-title">{title}</div><div className="section-sub">Nhập theo công trình và hạng mục</div></div>
-      </div>
-      <div className="card mb-16">
-        <div className="card-body" style={{padding:'16px 20px'}}>
-          <div style={{display:'flex',gap:16,alignItems:'flex-end'}}>
-            <div className="form-group" style={{margin:0,flex:1}}>
-              <label className="form-label">Chọn công trình</label>
-              <select className="form-select" value={selectedPid} onChange={e=>setSelectedPid(e.target.value)}>
-                <option value="">— Chọn công trình —</option>
-                {projects.map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
-              </select>
-            </div>
-          </div>
+        <div><div className="section-title">{title}</div>
+          <div className="section-sub">{summaryByProject.length} công trình đã nhập</div>
         </div>
+        {viewMode==='form'
+          ? <button className="btn btn-secondary" onClick={()=>setViewMode('list')}>← Quay lại danh sách</button>
+          : user.role !== 'viewer' && <button className="btn btn-primary" onClick={()=>{ setSelectedPid(''); setViewMode('form'); setLines({}); }}>+ Nhập mới</button>
+        }
       </div>
 
-      {selectedPid && (
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">{isB?'Đơn giá đấu thầu':'Dự trù chi phí'} — {selectedPid}</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--amber)',fontWeight:700}}>Tổng: {fmtB(total)}</span>
-          </div>
-          <div className="card-body">
-            <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,padding:'0 4px'}}>
-              <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Hạng mục</span>
-              <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Số tiền (VNĐ, chưa VAT)</span>
-              <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Đơn vị</span>
-              <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Ghi chú</span>
+      {/* DANH SÁCH */}
+      {viewMode === 'list' && (
+        <>
+          {summaryByProject.length === 0 ? (
+            <div className="empty"><div className="empty-icon">📊</div><div className="empty-text">Chưa có dữ liệu {title.toLowerCase()}. Nhấn "+ Nhập mới" để bắt đầu.</div></div>
+          ) : (
+            <div className="card mb-16">
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Công trình</th><th>Địa điểm</th><th>Số hạng mục</th><th className="text-right">Tổng {isB?'đấu thầu':'dự trù'}</th><th></th></tr></thead>
+                  <tbody>
+                    {summaryByProject.map(p => (
+                      <tr key={p.project_id}>
+                        <td><div style={{fontWeight:500}}>{p.project_name}</div><div className="text-sm text-muted">{p.project_id}</div></td>
+                        <td className="text-muted">{p.location}</td>
+                        <td className="mono text-sm">{p.rowCount} hạng mục</td>
+                        <td className="mono text-right font-bold text-amber">{fmtB(p.total)}</td>
+                        <td>
+                          {user.role !== 'viewer' &&
+                            <button className="btn btn-secondary btn-sm" onClick={()=>openForm(p.project_id)}>✏️ Xem / Sửa</button>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            {CATEGORIES.map(c => {
-              const l = lines[c.code]||{amount:'',unit:'Hệ',notes:''};
-              return (
-                <div key={c.code} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,alignItems:'center'}}>
-                  <div style={{fontWeight:500,fontSize:13,padding:'9px 0'}}>{c.name}</div>
-                  <input className="form-input" value={l.amount} onChange={e=>setLine(c.code,'amount',formatAmt(e.target.value))} placeholder="0" style={{textAlign:'right',fontFamily:'var(--mono)'}} />
-                  <select className="form-select" value={l.unit} onChange={e=>setLine(c.code,'unit',e.target.value)}>
-                    <option>Hệ</option><option>Lần</option><option>Tháng</option><option>m²</option><option>m</option>
-                  </select>
-                  <input className="form-input" value={l.notes} onChange={e=>setLine(c.code,'notes',e.target.value)} placeholder="Ghi chú..." />
-                </div>
-              );
-            })}
-            <div className="divider" />
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <span style={{fontSize:13,color:'var(--text3)'}}>Tổng {title}: <span style={{fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>{fmtB(total)}</span></span>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving?'Đang lưu...':'💾 Lưu vào Sheets'}</button>
+          )}
+
+          {/* Chi tiết theo hạng mục */}
+          {summaryByProject.length > 0 && (
+            <div className="card">
+              <div className="card-header"><span className="card-title">Chi tiết tất cả hạng mục</span></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Công trình</th><th>Hạng mục</th><th className="text-right">Số tiền</th><th>Đơn vị</th><th>Ngày cập nhật</th><th>Người cập nhật</th></tr></thead>
+                  <tbody>
+                    {source.map((b,i) => (
+                      <tr key={i}>
+                        <td className="text-sm">{projects.find(p=>p.project_id===b.project_id)?.short_name||b.project_id}</td>
+                        <td>{b.category_name || categories.find(c=>c.code===b.category_code)?.name || b.category_code}</td>
+                        <td className="mono text-right font-bold text-amber">{fmt(parseFloat(b[totField]))}</td>
+                        <td className="text-sm text-muted">{b.unit}</td>
+                        <td className="text-sm text-muted">{b.updated_at}</td>
+                        <td className="text-sm text-muted">{b.updated_by}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {!selectedPid && (
-        <div className="empty"><div className="empty-icon">📊</div><div className="empty-text">Chọn công trình để nhập {title.toLowerCase()}</div></div>
+      {/* FORM NHẬP / SỬA */}
+      {viewMode === 'form' && (
+        <>
+          <div className="card mb-16">
+            <div className="card-body" style={{padding:'16px 20px'}}>
+              <div className="form-group" style={{margin:0,maxWidth:400}}>
+                <label className="form-label">Chọn công trình</label>
+                <select className="form-select" value={selectedPid} onChange={e=>openForm(e.target.value)}>
+                  <option value="">— Chọn công trình —</option>
+                  {projects.map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {selectedPid && (
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">{isB?'Đơn giá đấu thầu':'Dự trù chi phí'} — {selectedPid}</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--amber)',fontWeight:700}}>Tổng: {fmtB(total)}</span>
+              </div>
+              <div className="card-body">
+                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,padding:'0 4px'}}>
+                  <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Hạng mục</span>
+                  <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Số tiền (VNĐ, chưa VAT)</span>
+                  <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Đơn vị</span>
+                  <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Ghi chú</span>
+                </div>
+                {categories.map(c => {
+                  const l = lines[c.code]||{amount:'',unit:'Hệ',notes:''};
+                  return (
+                    <div key={c.code} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,alignItems:'center'}}>
+                      <div style={{fontWeight:500,fontSize:13,padding:'9px 0'}}>{c.name}</div>
+                      <input className="form-input" value={l.amount} onChange={e=>setLine(c.code,'amount',formatAmt(e.target.value))} placeholder="0" style={{textAlign:'right',fontFamily:'var(--mono)'}} />
+                      <select className="form-select" value={l.unit} onChange={e=>setLine(c.code,'unit',e.target.value)}>
+                        <option>Hệ</option><option>Lần</option><option>Tháng</option><option>m²</option><option>m</option>
+                      </select>
+                      <input className="form-input" value={l.notes} onChange={e=>setLine(c.code,'notes',e.target.value)} placeholder="Ghi chú..." />
+                    </div>
+                  );
+                })}
+                <div className="divider" />
+                <div className="alert warning" style={{marginBottom:12}}>
+                  <span>⚠</span><span>Lưu sẽ <strong>ghi đè</strong> toàn bộ dữ liệu {title.toLowerCase()} của công trình này. Dữ liệu cũ sẽ bị xóa.</span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontSize:13,color:'var(--text3)'}}>Tổng: <span style={{fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>{fmtB(total)}</span></span>
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn btn-secondary" onClick={()=>setViewMode('list')}>Hủy</button>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving?'Đang lưu...':'💾 Lưu vào Sheets'}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1744,7 +1834,7 @@ function AppShell({ user, token, logout }) {
       case 'actual': return <ActualCostList user={user} token={token} />;
       case 'bid': return <BidBudgetPage user={user} mode="bid" />;
       case 'budget': return <BidBudgetPage user={user} mode="budget" />;
-      case 'projects': return <ProjectsPage user={user} token={token} />;
+      case 'projects': return <ProjectsPage user={user} />;
       case 'suppliers': return <SuppliersPage user={user} />;
       case 'users': return <UsersPage user={user} />;
       default: return <Dashboard user={user} />;
