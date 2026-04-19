@@ -410,128 +410,184 @@ function ToastProvider({ children }) {
 }
 
 // ============================================================
-// AUTH
+// AUTH HELPERS
+// ============================================================
+
+// Đọc whitelist từ sheet USERS (cột A=email, cột B=role)
+// Dùng OAuth token — không cần sheet public
+const checkWhitelist = async (accessToken, email) => {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/USERS!A:D`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const rows = (data.values || []).slice(1); // bỏ header
+    const found = rows.find(r => (r[0]||'').toLowerCase().trim() === email.toLowerCase().trim());
+    if (found) {
+      return { role: found[1] || 'viewer', full_name: found[2] || '', status: found[3] || 'Active' };
+    }
+    return null; // không có trong whitelist → mặc định viewer
+  } catch(e) {
+    console.warn('checkWhitelist error:', e.message);
+    return null;
+  }
+};
+
+// Lưu session vào localStorage
+const saveSession = (sessionObj) => {
+  localStorage.setItem('wc_session', JSON.stringify(sessionObj));
+};
+const loadSession = () => {
+  try { return JSON.parse(localStorage.getItem('wc_session') || 'null'); }
+  catch(e) { return null; }
+};
+const clearSession = () => {
+  localStorage.removeItem('wc_session');
+  localStorage.removeItem('wc_token');
+  localStorage.removeItem('wc_token_exp');
+};
+
+// ============================================================
+// AUTH HOOK
 // ============================================================
 function useAuth() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const tokenClientRef = useRef(null);
+  const [loading, setLoading] = useState(true); // true = đang verify session
 
+  // Khi load trang: đọc localStorage, verify role mới nhất từ Sheet
   useEffect(() => {
-    // Try restore session
-    const saved = localStorage.getItem('wc_user');
-    if (saved) {
-      try { setUser(JSON.parse(saved)); } catch(e) {}
-    }
-    // Preload GIS script immediately on page load (before user clicks anything)
-    if (!window.google?.accounts) {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setLoading(false);
-      script.onerror = () => setLoading(false);
-      document.head.appendChild(script);
-    } else {
-      setLoading(false);
-    }
-    // Restore token if not expired
+    const session = loadSession();
     const savedToken = localStorage.getItem('wc_token');
     const savedExp = parseInt(localStorage.getItem('wc_token_exp') || '0');
-    if (savedToken && savedExp > Date.now() + 60000) {
+    const tokenValid = savedToken && savedExp > Date.now() + 60000;
+
+    if (session && tokenValid) {
+      // Có session + token còn hạn → set user ngay để UI render,
+      // sau đó verify lại role từ Sheet
       setToken(savedToken);
+      setUser(session);
+      checkWhitelist(savedToken, session.email).then(wl => {
+        if (wl && wl.status === 'Active') {
+          const updated = { ...session, role: wl.role };
+          setUser(updated);
+          saveSession(updated);
+        } else if (wl === null) {
+          // Không tìm thấy trong sheet → giữ role cũ (viewer fallback)
+          const updated = { ...session, role: session.role || 'viewer' };
+          setUser(updated);
+          saveSession(updated);
+        } else {
+          // status Inactive → logout
+          clearSession();
+          setUser(null);
+          setToken(null);
+        }
+        setLoading(false);
+      });
+    } else {
+      // Không có session hoặc token hết hạn → preload GIS rồi show login
+      if (!window.google?.accounts) {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = () => setLoading(false);
+        s.onerror = () => setLoading(false);
+        document.head.appendChild(s);
+      } else {
+        setLoading(false);
+      }
     }
   }, []);
 
-  const login = (role, name, email, picture) => {
-    const u = { role, name, email, picture, initials: name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) };
-    setUser(u);
-    localStorage.setItem('wc_user', JSON.stringify(u));
+  const login = (sessionObj, accessToken) => {
+    saveSession(sessionObj);
+    localStorage.setItem('wc_token', accessToken);
+    localStorage.setItem('wc_token_exp', String(Date.now() + 3500 * 1000));
+    setToken(accessToken);
+    setUser(sessionObj);
   };
 
   const logout = () => {
+    clearSession();
     setUser(null);
     setToken(null);
-    localStorage.removeItem('wc_user');
-    localStorage.removeItem('wc_token');
-    localStorage.removeItem('wc_token_exp');
-    if (window.google) google.accounts.oauth2.revoke(token || '');
+    if (window.google?.accounts?.oauth2 && token) {
+      google.accounts.oauth2.revoke(token);
+    }
   };
 
-  const requestToken = () => {
-    if (tokenClientRef.current) tokenClientRef.current.requestAccessToken();
-  };
-
-  return { user, token, loading, login, logout, requestToken, setToken };
+  return { user, token, loading, login, logout };
 }
 
 // ============================================================
 // LOGIN PAGE
 // ============================================================
 function LoginPage({ onLogin }) {
-  const [step, setStep] = useState('idle');
+  const [step, setStep] = useState('idle'); // idle | loading | verify | error
   const [error, setError] = useState('');
-  const toast = useToast();
 
-  const verifyAndLogin = async (email, name, picture, accessToken) => {
-    setStep('verify');
-    // Save token
-    localStorage.setItem('wc_token', accessToken);
-    localStorage.setItem('wc_token_exp', String(Date.now() + 3500*1000));
-    try {
-      // Dùng accessToken để đọc USERS — không cần Sheets public
-      const rows = await sheetsGet(accessToken, SHEETS.USERS);
-      const users = parseRows(rows, ['email','role','full_name','status']);
-      const found = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      if (found && found.status === 'Active') {
-        onLogin(found.role, found.full_name || name, email, picture);
-        toast('Đăng nhập thành công!', 'success');
-      } else if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
-        onLogin('admin', name, email, picture);
-        toast('Đăng nhập Admin thành công!', 'success');
-      } else {
-        setStep('error');
-        setError('Email chưa được cấp quyền. Liên hệ Admin để được thêm vào hệ thống.');
-      }
-    } catch(e) {
-      if (CONFIG.ADMIN_EMAILS.includes(email.toLowerCase())) {
-        onLogin('admin', name, email, picture);
-        toast('Đăng nhập thành công (admin fallback)!', 'success');
-      } else {
-        setStep('error');
-        setError('Lỗi đọc danh sách người dùng: ' + e.message);
-      }
-    }
-  };
-
-  // This must be called directly from a user click — no async before window.open
   const handleLogin = () => {
     setError('');
     setStep('loading');
 
-    const run = () => {
+    const doOAuth = () => {
       const tc = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
-        scope: CONFIG.SCOPES,
+        // Chỉ cần scope Sheets để đọc whitelist + ghi data
+        // userinfo.email/profile để lấy thông tin user
+        scope: [
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/userinfo.email',
+          'https://www.googleapis.com/auth/userinfo.profile',
+        ].join(' '),
+        // QUAN TRỌNG: không có redirect_uri trong token flow
         callback: async (resp) => {
           if (resp.error) {
             setStep('error');
-            setError('Google từ chối: ' + (resp.error_description || resp.error));
+            setError('Lỗi OAuth: ' + (resp.error_description || resp.error));
             return;
           }
-          // Get user info
+
+          const accessToken = resp.access_token;
+
+          // Bước 1: Lấy thông tin user từ Google userinfo API
           try {
-            const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: 'Bearer ' + resp.access_token }
+            const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: 'Bearer ' + accessToken }
             });
-            const info = await r.json();
-            await verifyAndLogin(
-              (info.email||'').toLowerCase(),
-              info.name || info.email,
-              info.picture || '',
-              resp.access_token
-            );
+            if (!infoRes.ok) throw new Error('userinfo HTTP ' + infoRes.status);
+            const info = await infoRes.json();
+
+            const email = (info.email || '').toLowerCase().trim();
+            const name = info.name || email;
+            const given_name = info.given_name || name;
+            const picture = info.picture || '';
+
+            setStep('verify');
+
+            // Bước 2: Tra email vào whitelist (sheet USERS)
+            const wl = await checkWhitelist(accessToken, email);
+
+            let role = 'viewer'; // mặc định nếu không có trong sheet
+            if (wl && wl.status === 'Active') {
+              role = wl.role;
+            } else if (wl && wl.status !== 'Active') {
+              setStep('error');
+              setError('Tài khoản đã bị vô hiệu hóa. Liên hệ Admin.');
+              return;
+            }
+            // wl === null → không có trong sheet → viewer
+
+            // Bước 3: Tạo session object và đăng nhập
+            const session = { email, name, given_name, picture, role,
+              initials: name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)
+            };
+
+            onLogin(session, accessToken);
+
           } catch(e) {
             setStep('error');
             setError('Lỗi lấy thông tin tài khoản: ' + e.message);
@@ -539,23 +595,22 @@ function LoginPage({ onLogin }) {
         },
         error_callback: (err) => {
           setStep('idle');
-          setError(err.type === 'popup_closed' ? '' : 'Lỗi: ' + (err.message || err.type));
+          if (err.type !== 'popup_closed') {
+            setError('Lỗi: ' + (err.message || err.type));
+          }
         },
       });
-      // requestAccessToken phải gọi SYNCHRONOUSLY trong click handler
+
+      // requestAccessToken gọi trực tiếp trong click handler → Chrome không block popup
       tc.requestAccessToken({ prompt: 'select_account' });
     };
 
+    // GIS đã được preload khi trang load → luôn available ở đây
     if (window.google?.accounts?.oauth2) {
-      run();
+      doOAuth();
     } else {
-      // Script chưa load — load xong thì báo user click lại (không thể auto-open popup async)
-      setStep('idle');
-      setError('Thư viện Google chưa sẵn sàng. Vui lòng thử lại sau 2 giây.');
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = () => setError('');
-      document.head.appendChild(s);
+      setStep('error');
+      setError('Thư viện Google chưa sẵn sàng. Reload trang và thử lại.');
     }
   };
 
@@ -564,20 +619,38 @@ function LoginPage({ onLogin }) {
       <div className="login-card">
         <div className="login-logo">WEALTHCONS</div>
         <div className="login-title">Theo Dõi Chi Phí Thuê Thiết Bị</div>
-        <div className="login-sub">Hệ thống quản lý chi phí thuê thiết bị xây dựng<br/>tích hợp Google Sheets · 6 dự án · 7 hạng mục</div>
-        {error && <div className="alert error" style={{marginBottom:16,textAlign:'left'}}><span>✕</span><span>{error}</span></div>}
-        {step === 'loading' || step === 'verify' ? (
+        <div className="login-sub">
+          Hệ thống quản lý chi phí thuê thiết bị xây dựng<br/>
+          tích hợp Google Sheets · 6 dự án · 7 hạng mục
+        </div>
+
+        {error && (
+          <div className="alert error" style={{marginBottom:16,textAlign:'left'}}>
+            <span>✕</span><span>{error}</span>
+          </div>
+        )}
+
+        {(step === 'loading' || step === 'verify') ? (
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'13px 20px',background:'rgba(245,158,11,0.1)',borderRadius:8,color:'var(--amber)'}}>
             <div className="spinner"></div>
-            <span>{step==='verify'?'Đang xác thực quyền truy cập...':'Đang kết nối Google...'}</span>
+            <span>{step === 'verify' ? 'Đang xác thực quyền truy cập...' : 'Đang mở Google...'}</span>
           </div>
         ) : (
           <button className="login-btn" onClick={handleLogin}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
             Đăng nhập bằng Google
           </button>
         )}
-        <div className="login-footer" style={{marginTop:16}}>Chỉ dành cho nhân viên Wealthcons Construction<br/>Phiên bản 1.0 · {new Date().getFullYear()}</div>
+
+        <div className="login-footer" style={{marginTop:16}}>
+          Chỉ dành cho nhân viên Wealthcons Construction<br/>
+          Phiên bản 1.0 · {new Date().getFullYear()}
+        </div>
       </div>
     </div>
   );
@@ -589,7 +662,7 @@ function LoginPage({ onLogin }) {
 const DataContext = React.createContext(null);
 const useData = () => React.useContext(DataContext);
 
-function DataProvider({ user, token, requestToken, children }) {
+function DataProvider({ user, token, children }) {
   const [projects, setProjects] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [actuals, setActuals] = useState([]);
@@ -1660,7 +1733,7 @@ const NAV_ITEMS = [
   { id:'users', label:'Người Dùng', icon:'👥', roles:['admin'] },
 ];
 
-function AppShell({ user, token, requestToken, logout }) {
+function AppShell({ user, token, logout }) {
   const [page, setPage] = useState('dashboard');
 
   const visibleNav = NAV_ITEMS.filter(n => n.roles.includes(user.role));
@@ -1681,7 +1754,7 @@ function AppShell({ user, token, requestToken, logout }) {
   const currentNav = NAV_ITEMS.find(n=>n.id===page);
 
   return (
-    <DataProvider user={user} token={token} requestToken={requestToken}>
+    <DataProvider user={user} token={token}>
       <div id="app-shell" style={{display:'flex',width:'100%'}}>
         <aside className="sidebar">
           <div className="sidebar-logo">
@@ -1728,7 +1801,7 @@ function AppShell({ user, token, requestToken, logout }) {
 // ROOT
 // ============================================================
 function App() {
-  const { user, token, loading, login, logout, requestToken } = useAuth();
+  const { user, token, loading, login, logout } = useAuth();
 
   if (loading) return (
     <div className="loading-page">
@@ -1738,7 +1811,7 @@ function App() {
   );
 
   if (!user) return <LoginPage onLogin={login} />;
-  return <AppShell user={user} token={token} requestToken={requestToken} logout={logout} />;
+  return <AppShell user={user} token={token} logout={logout} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
