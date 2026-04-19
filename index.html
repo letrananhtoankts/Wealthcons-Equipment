@@ -267,6 +267,7 @@ const CONFIG = {
   SPREADSHEET_ID: '1WzAX5czxrCAye2S5CdTqSElKz3isXLhul9okEelGm1M',
   SCOPES: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
   ADMIN_EMAILS: ['letrananhtoan.kts@gmail.com'],
+  DRIVE_FOLDER_ID: '1lVx7YrEnG9uX38L_LhuJmuQQ3bAuyOYq',
 };
 
 const FALLBACK_CATEGORIES = [
@@ -369,7 +370,35 @@ const sheetsUpdate = async (token, range, values) => {
   return await res.json();
 };
 
-// Parse rows (skip header row 1)
+// Upload PDF lên Google Drive
+const driveUpload = async (token, file, fileName) => {
+  // Bước 1: Tạo metadata
+  const metadata = {
+    name: fileName,
+    parents: [CONFIG.DRIVE_FOLDER_ID],
+    mimeType: 'application/pdf',
+  };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || 'Drive upload failed: ' + res.status);
+  }
+  const data = await res.json();
+  // Bước 2: Set permission public view để link hoạt động
+  await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+  });
+  return `https://drive.google.com/file/d/${data.id}/view`;
+};
 const parseRows = (rows, fields) => {
   if (!rows || rows.length < 2) return [];
   return rows.slice(1).map(row => {
@@ -726,6 +755,15 @@ function DataProvider({ user, token, children }) {
     setActuals(prev => [...prev, ...newItems]);
   };
 
+  // ACTUAL COST — edit (tìm theo cost_id → overwrite)
+  const updateActual = async (costId, updatedRow) => {
+    const rowNum = await sheetsFindRow(token, 'ACTUAL_COST', costId);
+    if (rowNum < 0) throw new Error('Không tìm thấy cost_id: ' + costId);
+    await sheetsOverwriteRow(token, 'ACTUAL_COST', rowNum, updatedRow);
+    const updated = { cost_id:updatedRow[0], project_id:updatedRow[1], supplier_id:updatedRow[2], category_code:updatedRow[3], sub_category:updatedRow[4], month:updatedRow[5], amount:updatedRow[6], bill_ref:updatedRow[7], bill_pdf_url:updatedRow[8], input_date:updatedRow[9], input_by:updatedRow[10], is_verified:updatedRow[11], verified_by:updatedRow[12], notes:updatedRow[13] };
+    setActuals(prev => prev.map(a => a.cost_id === costId ? updated : a));
+  };
+
   // PROJECT — append (mới) hoặc overwrite (edit)
   const saveProject = async (row, isEdit) => {
     if (isEdit) {
@@ -789,7 +827,7 @@ function DataProvider({ user, token, children }) {
   };
 
   return (
-    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, categories, users, loadingData, loadAll, appendActual, saveProject, saveSupplier, appendUser, overwriteBidBudget }}>
+    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, categories, users, loadingData, loadAll, appendActual, updateActual, saveProject, saveSupplier, appendUser, overwriteBidBudget }}>
       {children}
     </DataContext.Provider>
   );
@@ -1074,95 +1112,134 @@ function Dashboard({ user }) {
 }
 
 // ============================================================
-// NHẬP CHI PHÍ THỰC TẾ
+// FORM NHẬP / SỬA CHI PHÍ THỰC TẾ
 // ============================================================
-function ActualCostForm({ user, token, onClose }) {
-  const { projects, suppliers, appendActual, categories } = useData();
+function ActualCostForm({ user, token, onClose, editData }) {
+  const { projects, suppliers, appendActual, updateActual, categories } = useData();
   const toast = useToast();
-  const [form, setForm] = useState({ project_id:'', supplier_id:'', month: nowMonth(), bill_ref:'', bill_pdf_url:'' });
-  const [lines, setLines] = useState([{ category_code:'', amount:'', notes:'' }]);
+  const isEdit = !!editData;
+
+  const [form, setForm] = useState({
+    project_id:   editData?.project_id   || '',
+    supplier_id:  editData?.supplier_id  || '',
+    month:        editData?.month        || nowMonth(),
+    bill_ref:     editData?.bill_ref     || '',
+    bill_pdf_url: editData?.bill_pdf_url || '',
+    notes:        editData?.notes        || '',
+  });
+  const [lines, setLines] = useState(
+    isEdit
+      ? [{ category_code: editData.category_code, amount: editData.amount ? parseInt(editData.amount).toLocaleString('vi-VN') : '', notes: editData.notes||'' }]
+      : [{ category_code:'', amount:'', notes:'' }]
+  );
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const set = (k, v) => setForm(f => ({...f, [k]:v}));
-  const setLine = (i, k, v) => setLines(ls => ls.map((l,j) => j===i ? {...l,[k]:v} : l));
-  const addLine = () => setLines(ls => [...ls, { category_code:'', amount:'', notes:'' }]);
-  const removeLine = (i) => setLines(ls => ls.filter((_,j) => j!==i));
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const setLine = (i,k,v) => setLines(ls=>ls.map((l,j)=>j===i?{...l,[k]:v}:l));
+  const addLine = () => setLines(ls=>[...ls,{category_code:'',amount:'',notes:''}]);
+  const removeLine = (i) => setLines(ls=>ls.filter((_,j)=>j!==i));
+  const formatAmt = v => { const n=v.replace(/\D/g,''); return n?parseInt(n).toLocaleString('vi-VN'):''; };
+
+  // Upload PDF lên Drive
+  const handlePdfUpload = async (file) => {
+    if (!file || file.type !== 'application/pdf') { toast('Chỉ chấp nhận file PDF', 'error'); return; }
+    if (file.size > 20*1024*1024) { toast('File không được quá 20MB', 'error'); return; }
+    setUploading(true);
+    try {
+      const pid = form.project_id || 'UNKNOWN';
+      const sid = form.supplier_id || 'UNKNOWN';
+      const mon = (form.month||nowMonth()).replace('/','_');
+      const ref = (form.bill_ref||'BILL').replace(/\s/g,'_');
+      const fileName = `${pid}_${sid}_${mon}_${ref}.pdf`;
+      const url = await driveUpload(token, file, fileName);
+      set('bill_pdf_url', url);
+      toast('Upload PDF thành công!', 'success');
+    } catch(e) {
+      toast('Lỗi upload: ' + e.message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const validate = () => {
     const e = {};
     if (!form.project_id) e.project_id = 'Chọn công trình';
     if (!form.supplier_id) e.supplier_id = 'Chọn NCC';
     if (!form.month) e.month = 'Nhập tháng';
-    if (!form.bill_ref) e.bill_ref = 'Nhập số chứng từ';
-    lines.forEach((l,i) => {
-      if (!l.category_code) e[`cat_${i}`] = 'Chọn hạng mục';
-      if (!l.amount || isNaN(l.amount.replace(/\./g,''))) e[`amt_${i}`] = 'Nhập số tiền';
+    if (!isEdit && !form.bill_ref) e.bill_ref = 'Nhập số chứng từ';
+    lines.forEach((l,i)=>{
+      if (!l.category_code) e[`cat_${i}`]='Chọn hạng mục';
+      if (!l.amount||isNaN(l.amount.replace(/\./g,''))) e[`amt_${i}`]='Nhập số tiền';
     });
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return Object.keys(e).length===0;
   };
 
   const handleSubmit = async () => {
     if (!validate()) return;
     setSaving(true);
     try {
-      const rows = lines.map((l, i) => [
-        genId('C'),
-        form.project_id,
-        form.supplier_id,
-        l.category_code,
-        l.category_code,
-        form.month,
-        l.amount.replace(/\./g,''),
-        form.bill_ref,
-        form.bill_pdf_url,
-        todayStr(),
-        user.name,
-        'FALSE',
-        '',
-        l.notes,
-      ]);
-      await appendActual(rows);
-      toast(`Đã lưu ${rows.length} dòng chi phí vào Sheets!`, 'success');
+      if (isEdit) {
+        // Edit — overwrite 1 dòng theo cost_id
+        const row = [
+          editData.cost_id, editData.project_id, editData.supplier_id,
+          lines[0].category_code, lines[0].category_code,
+          form.month, lines[0].amount.replace(/\./g,''),
+          form.bill_ref || editData.bill_ref,
+          form.bill_pdf_url,
+          editData.input_date, editData.input_by,
+          editData.is_verified, editData.verified_by,
+          form.notes,
+        ];
+        await updateActual(editData.cost_id, row);
+        toast('Đã cập nhật chi phí!', 'success');
+      } else {
+        // Thêm mới — append nhiều dòng
+        const rows = lines.map(l => [
+          genId('C'), form.project_id, form.supplier_id,
+          l.category_code, l.category_code, form.month,
+          l.amount.replace(/\./g,''), form.bill_ref,
+          form.bill_pdf_url, todayStr(), user.name,
+          'FALSE', '', l.notes,
+        ]);
+        await appendActual(rows);
+        toast(`Đã lưu ${rows.length} dòng chi phí!`, 'success');
+      }
       onClose();
     } catch(e) {
-      toast('Lỗi lưu dữ liệu: ' + e.message, 'error');
+      toast('Lỗi: '+e.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const formatAmt = (v) => {
-    const n = v.replace(/\D/g,'');
-    return n ? parseInt(n).toLocaleString('vi-VN') : '';
-  };
-
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <span className="modal-title">📝 Nhập Chi Phí Thực Tế</span>
+          <span className="modal-title">{isEdit?'✏️ Chỉnh sửa Chi Phí':'📝 Nhập Chi Phí Thực Tế'}</span>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          <div className="alert info">Một NCC có thể nhập nhiều hạng mục trong cùng 1 bill. Nhấn "+ Thêm hạng mục" để thêm dòng.</div>
-          
-          {/* Step 1 */}
-          <div style={{marginBottom:16,fontWeight:600,fontSize:12,color:'var(--amber)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Thông tin chứng từ</div>
+          {!isEdit && <div className="alert info" style={{marginBottom:16}}>Một NCC có thể nhập nhiều hạng mục trong cùng 1 bill.</div>}
+
+          {/* Thông tin chứng từ */}
+          <div style={{marginBottom:12,fontWeight:600,fontSize:12,color:'var(--amber)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Thông tin chứng từ</div>
           <div className="form-grid cols2" style={{marginBottom:16}}>
             <div className="form-group">
               <label className="form-label required">Công trình</label>
-              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>set('project_id',e.target.value)}>
-                <option value="">— Chọn công trình —</option>
+              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>set('project_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+                <option value="">— Chọn —</option>
                 {projects.filter(p=>p.status==='Active').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
               </select>
               {errors.project_id && <span className="form-error">{errors.project_id}</span>}
             </div>
             <div className="form-group">
               <label className="form-label required">Nhà cung cấp</label>
-              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value)}>
-                <option value="">— Chọn NCC —</option>
+              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+                <option value="">— Chọn —</option>
                 {suppliers.filter(s=>s.status==='Active').map(s=><option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}
               </select>
               {errors.supplier_id && <span className="form-error">{errors.supplier_id}</span>}
@@ -1173,20 +1250,37 @@ function ActualCostForm({ user, token, onClose }) {
               {errors.month && <span className="form-error">{errors.month}</span>}
             </div>
             <div className="form-group">
-              <label className="form-label required">Số chứng từ / Bill</label>
-              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="VD: BILL-TT-001" />
+              <label className="form-label required">Số chứng từ</label>
+              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="BILL-TT-001" />
               {errors.bill_ref && <span className="form-error">{errors.bill_ref}</span>}
             </div>
           </div>
-          <div className="form-group" style={{marginBottom:20}}>
-            <label className="form-label">Link PDF Bill (Google Drive)</label>
-            <input className="form-input" value={form.bill_pdf_url} onChange={e=>set('bill_pdf_url',e.target.value)} placeholder="https://drive.google.com/..." />
-            <span className="form-hint">Upload PDF lên Drive → chuột phải → Lấy link → paste vào đây</span>
+
+          {/* Upload PDF */}
+          <div className="form-group" style={{marginBottom:16}}>
+            <label className="form-label">File Bill PDF</label>
+            <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              <label style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 14px',background:'var(--navy3)',border:'1px solid var(--border)',borderRadius:7,cursor: uploading?'wait':'pointer',fontSize:13,color:'var(--text2)',transition:'all 0.15s'}}>
+                <input type="file" accept="application/pdf" style={{display:'none'}} onChange={e=>e.target.files[0]&&handlePdfUpload(e.target.files[0])} disabled={uploading} />
+                {uploading ? <><div className="spinner" style={{width:14,height:14,borderWidth:2}}></div> Đang upload...</> : '📎 Chọn file PDF'}
+              </label>
+              {form.bill_pdf_url && (
+                <a href={form.bill_pdf_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:'var(--green)'}}>✓ Đã upload — Xem file</a>
+              )}
+            </div>
+            {form.bill_pdf_url && (
+              <div style={{marginTop:6}}>
+                <input className="form-input" value={form.bill_pdf_url} onChange={e=>set('bill_pdf_url',e.target.value)} style={{fontSize:11}} placeholder="Hoặc paste link Drive..." />
+              </div>
+            )}
+            {!form.bill_pdf_url && (
+              <input className="form-input" value={form.bill_pdf_url} onChange={e=>set('bill_pdf_url',e.target.value)} style={{fontSize:11,marginTop:6}} placeholder="Hoặc paste link Drive trực tiếp..." />
+            )}
           </div>
 
           <div className="divider" />
 
-          {/* Step 2: Line items */}
+          {/* Hạng mục */}
           <div style={{marginBottom:12,fontWeight:600,fontSize:12,color:'var(--amber)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Chi tiết hạng mục</div>
           <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 32px',gap:8,marginBottom:6,padding:'0 12px'}}>
             <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Hạng mục *</span>
@@ -1195,7 +1289,7 @@ function ActualCostForm({ user, token, onClose }) {
             <span></span>
           </div>
           <div className="line-items">
-            {lines.map((l, i) => (
+            {lines.map((l,i)=>(
               <div key={i} className="line-item">
                 <div>
                   <select className={`form-select ${errors[`cat_${i}`]?'error':''}`} value={l.category_code} onChange={e=>setLine(i,'category_code',e.target.value)}>
@@ -1213,19 +1307,21 @@ function ActualCostForm({ user, token, onClose }) {
               </div>
             ))}
           </div>
-          <button className="add-line-btn" onClick={addLine}>+ Thêm hạng mục</button>
+          {!isEdit && <button className="add-line-btn" onClick={addLine}>+ Thêm hạng mục</button>}
 
           <div className="divider" />
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <div style={{fontSize:13,color:'var(--text3)'}}>Tổng: <span style={{fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>
-              {fmt(lines.reduce((s,l)=>s+(parseInt(l.amount.replace(/\./g,''))||0),0))} VNĐ
-            </span></div>
+            <div style={{fontSize:13,color:'var(--text3)'}}>
+              Tổng: <span style={{fontFamily:'var(--mono)',color:'var(--amber)',fontWeight:700}}>
+                {fmt(lines.reduce((s,l)=>s+(parseInt((l.amount||'').replace(/\./g,''))||0),0))} VNĐ
+              </span>
+            </div>
           </div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? <><div className="spinner" style={{width:14,height:14,borderWidth:2}}></div> Đang lưu...</> : '💾 Lưu vào Sheets'}
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving||uploading}>
+            {saving?<><div className="spinner" style={{width:14,height:14,borderWidth:2}}></div> Đang lưu...</>:isEdit?'💾 Cập nhật':'💾 Lưu vào Sheets'}
           </button>
         </div>
       </div>
@@ -1239,6 +1335,7 @@ function ActualCostForm({ user, token, onClose }) {
 function ActualCostList({ user, token }) {
   const { actuals, projects, suppliers, categories } = useData();
   const [showForm, setShowForm] = useState(false);
+  const [editData, setEditData] = useState(null);
   const [filterPid, setFilterPid] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
   const [filterMonth, setFilterMonth] = useState('');
@@ -1264,6 +1361,9 @@ function ActualCostList({ user, token }) {
   const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code || id;
   const getCatName = code => categories.find(c=>c.code===code)?.name || code;
 
+  const openEdit = (a) => { setEditData(a); setShowForm(true); };
+  const openAdd = () => { setEditData(null); setShowForm(true); };
+
   return (
     <div>
       <div className="section-header mb-20">
@@ -1272,7 +1372,7 @@ function ActualCostList({ user, token }) {
           <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}</div>
         </div>
         {(user.role === 'admin' || user.role === 'editor') && (
-          <button className="btn btn-primary" onClick={()=>setShowForm(true)}>+ Nhập Chi Phí Mới</button>
+          <button className="btn btn-primary" onClick={openAdd}>+ Nhập Chi Phí Mới</button>
         )}
       </div>
 
@@ -1314,9 +1414,10 @@ function ActualCostList({ user, token }) {
               <th>PDF</th>
               <th>Ngày nhập</th>
               <th>Người nhập</th>
+              <th></th>
             </tr></thead>
             <tbody>
-              {paged.length === 0 && <tr><td colSpan={10} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
+              {paged.length === 0 && <tr><td colSpan={11} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
               {paged.map(a => (
                 <tr key={a.cost_id}>
                   <td className="mono text-sm text-muted">{a.cost_id}</td>
@@ -1329,6 +1430,7 @@ function ActualCostList({ user, token }) {
                   <td>{a.bill_pdf_url ? <a href={a.bill_pdf_url} target="_blank" rel="noopener noreferrer" style={{color:'var(--amber)',fontSize:11}}>📄 Xem</a> : <span className="text-muted text-sm">—</span>}</td>
                   <td className="text-sm text-muted">{a.input_date}</td>
                   <td className="text-sm text-muted">{a.input_by}</td>
+                  <td>{(user.role==='admin'||user.role==='editor') && a.cost_id && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(a)}>✏️</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -1343,7 +1445,7 @@ function ActualCostList({ user, token }) {
         )}
       </div>
 
-      {showForm && <ActualCostForm user={user} token={token} onClose={()=>setShowForm(false)} />}
+      {showForm && <ActualCostForm user={user} token={token} onClose={()=>{setShowForm(false);setEditData(null);}} editData={editData} />}
     </div>
   );
 }
