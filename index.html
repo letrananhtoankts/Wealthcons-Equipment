@@ -964,7 +964,7 @@ function DonutChart({ labels, data, colors, showPctLabels = false }) {
           legend: {
             position: isMobile ? 'bottom' : 'right',
             labels: {
-              color: '#94a3b8',
+              color: '#e2e8f0',
               font: { size: isMobile ? 10 : 11, family: "'IBM Plex Sans'" },
               boxWidth: 10, padding: isMobile ? 6 : 10,
               // Hiện % trong legend
@@ -977,6 +977,7 @@ function DonutChart({ labels, data, colors, showPctLabels = false }) {
                     text: isMobile ? `${label} ${pct}%` : `${label}`,
                     fillStyle: ds.backgroundColor[i],
                     strokeStyle: ds.backgroundColor[i],
+                    fontColor: '#e2e8f0',
                     index: i,
                   };
                 });
