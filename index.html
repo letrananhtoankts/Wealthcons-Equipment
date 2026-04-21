@@ -988,9 +988,10 @@ function DonutChart({ labels, data, colors, isMobile = false }) {
   const ref = useRef();
   const chartRef = useRef();
 
-  // Lọc bỏ các item có giá trị 0 trước khi render
+  // Lọc bỏ các item có giá trị 0 trước khi render, sort giảm dần
   const filtered = labels.map((l,i) => ({ label:l, value:data[i]||0, color:colors[i%colors.length] }))
-                         .filter(item => item.value > 0);
+                         .filter(item => item.value > 0)
+                         .sort((a,b) => b.value - a.value);
   const fLabels = filtered.map(i=>i.label);
   const fData   = filtered.map(i=>i.value);
   const fColors = filtered.map(i=>i.color);
@@ -1018,7 +1019,7 @@ function DonutChart({ labels, data, colors, isMobile = false }) {
                   const val = ds.data[i];
                   const pct = total > 0 ? Math.round(val/total*100) : 0;
                   return {
-                    text: isMobile ? `${label} ${pct}%` : `${label}`,
+                    text: `${label} ${pct}%`,
                     fillStyle: ds.backgroundColor[i],
                     strokeStyle: ds.backgroundColor[i],
                     fontColor: '#e2e8f0',
