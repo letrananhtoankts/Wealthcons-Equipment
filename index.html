@@ -1054,9 +1054,10 @@ function LineChart({ labels, datasets }) {
 // DASHBOARD
 // ============================================================
 // Helper sort dự án: Active trước, Closed sau
-const sortProjects = (projects) => [
-  ...projects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động'),
-  ...projects.filter(p => p.status !== 'Active' && p.status !== 'Đang hoạt động'),
+const isActive = (s) => s === 'Active' || s === 'Đang hoạt động';
+const isActiveSupplier = (s) => s.status === 'Active' || s.status === 'Đang hoạt động' || s.status === 'active';
+  ...projects.filter(p => isActive(p.status)),
+  ...projects.filter(p => !isActive(p.status)),
 ];
 
 const projectStatusLabel = (s) => s === 'Active' ? 'Đang hoạt động' : s === 'Closed' ? 'Đã kết thúc' : s;
@@ -1155,7 +1156,7 @@ function Dashboard({ user }) {
           <span className="filter-label">Công trình</span>
           <select className="select-input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{minWidth:180}}>
             <option value="all">— Tất cả dự án —</option>
-            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').length>0 && <option disabled>── Đã kết thúc ──</option>}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
           </select>
@@ -1335,7 +1336,7 @@ function Dashboard({ user }) {
           </select>
           <select className="form-select" style={{flex:2}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
             <option value="all">Tất cả dự án</option>
-            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
           </select>
         </div>
@@ -1498,12 +1499,42 @@ function ActualCostForm({ user, token, onClose, editData }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [dupWarning, setDupWarning] = useState('');
 
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const setLine = (i,k,v) => setLines(ls=>ls.map((l,j)=>j===i?{...l,[k]:v}:l));
   const addLine = () => setLines(ls=>[...ls,{category_code:'',amount:'',notes:''}]);
   const removeLine = (i) => setLines(ls=>ls.filter((_,j)=>j!==i));
   const formatAmt = v => { const n=v.replace(/\D/g,''); return n?parseInt(n).toLocaleString('vi-VN'):''; };
+
+  // Auto-generate bill_ref khi đủ 3 trường: project + supplier + month
+  const handleFieldChange = (k, v) => {
+    const newForm = { ...form, [k]: v };
+    setForm(newForm);
+
+    const pid = newForm.project_id;
+    const sid = newForm.supplier_id;
+    const mon = newForm.month;
+
+    if (pid && sid && mon && !isEdit) {
+      // Tạo số chứng từ: BILL-{PROJECT}-{SUPPLIER}-{MM_YYYY}
+      const monCode = mon.replace('/', '_');
+      const autoRef = `BILL-${pid}-${sid}-${monCode}`;
+      setForm(f => ({ ...f, [k]: v, bill_ref: autoRef }));
+
+      // Kiểm tra trùng: cùng project + supplier + month đã có trong actuals chưa
+      const dup = actuals.find(a =>
+        a.project_id === pid &&
+        a.supplier_id === sid &&
+        a.month === mon
+      );
+      if (dup) {
+        setDupWarning(`⚠️ Đã có bill cho ${sid} tại ${pid} tháng ${mon} (Mã CT: ${dup.cost_id}). Kiểm tra trước khi lưu tiếp.`);
+      } else {
+        setDupWarning('');
+      }
+    }
+  };
 
   // Upload PDF lên Drive
   const handlePdfUpload = async (file) => {
@@ -1588,33 +1619,38 @@ function ActualCostForm({ user, token, onClose, editData }) {
         <div className="modal-body">
           {!isEdit && <div className="alert info" style={{marginBottom:16}}>Một NCC có thể nhập nhiều hạng mục trong cùng 1 bill.</div>}
 
-          {/* Thông tin chứng từ */}
           <div style={{marginBottom:12,fontWeight:600,fontSize:12,color:'var(--amber)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Thông tin chứng từ</div>
+          {dupWarning && (
+            <div className="alert warning" style={{marginBottom:12}}>
+              <span>⚠</span><span>{dupWarning}</span>
+            </div>
+          )}
           <div className="form-grid cols2" style={{marginBottom:16}}>
             <div className="form-group">
               <label className="form-label required">Công trình</label>
-              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>set('project_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>handleFieldChange('project_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
                 <option value="">— Chọn —</option>
-                {projects.filter(p=>p.status==='Active').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+                {projects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
               </select>
               {errors.project_id && <span className="form-error">{errors.project_id}</span>}
             </div>
             <div className="form-group">
               <label className="form-label required">Nhà cung cấp</label>
-              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>handleFieldChange('supplier_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
                 <option value="">— Chọn —</option>
-                {suppliers.filter(s=>s.status==='Active').map(s=><option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}
+                {suppliers.filter(s=>isActive(s.status)).map(s=><option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}
               </select>
               {errors.supplier_id && <span className="form-error">{errors.supplier_id}</span>}
             </div>
             <div className="form-group">
               <label className="form-label required">Tháng phát sinh</label>
-              <input className={`form-input ${errors.month?'error':''}`} value={form.month} onChange={e=>set('month',e.target.value)} placeholder="MM/YYYY" />
+              <input className={`form-input ${errors.month?'error':''}`} value={form.month} onChange={e=>handleFieldChange('month',e.target.value)} placeholder="MM/YYYY" />
               {errors.month && <span className="form-error">{errors.month}</span>}
             </div>
             <div className="form-group">
               <label className="form-label required">Số chứng từ</label>
-              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="BILL-TT-001" />
+              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="Tự điền khi chọn đủ Công trình + NCC + Tháng" />
+              <span className="form-hint">Tự động tạo theo: BILL-{'{'}DỰ ÁN{'}'}-{'{'}NCC{'}'}-{'{'}THÁNG{'}'}</span>
               {errors.bill_ref && <span className="form-error">{errors.bill_ref}</span>}
             </div>
           </div>
@@ -1982,7 +2018,7 @@ function SuppliersPage({ user }) {
   return (
     <div>
       <div className="section-header mb-20">
-        <div><div className="section-title">Quản Lý Nhà Cung Cấp</div><div className="section-sub">{suppliers.filter(s=>s.status==='Active').length} đang hoạt động</div></div>
+        <div><div className="section-title">Quản Lý Nhà Cung Cấp</div><div className="section-sub">{suppliers.filter(s=>isActive(s.status)).length} đang hoạt động</div></div>
         {user.role === 'admin' && <button className="btn btn-primary" onClick={openAdd}>+ Thêm NCC</button>}
       </div>
       <div className="card">
@@ -2000,7 +2036,7 @@ function SuppliersPage({ user }) {
                     {(s.categories||'').split(',').filter(Boolean).map(c=><span key={c} className="badge active" style={{marginRight:4,marginBottom:2}}>{getCatName(c)}</span>)}
                   </td>
                   <td className="text-sm text-muted">{s.bank_name}{s.bank_account?` · ${s.bank_account}`:''}</td>
-                  <td><span className={`badge ${s.status==='Active'?'active':'closed'}`}>{s.status}</span></td>
+                  <td><span className={`badge ${isActive(s.status)?'active':'closed'}`}>{s.status}</span></td>
                   <td style={{display:'flex',gap:6,whiteSpace:'nowrap'}}>
                     {user.role==='admin' && <>
                       <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(s)}>✏️ Sửa</button>
@@ -2292,7 +2328,7 @@ function UsersPage({ user }) {
                   <td className="mono text-sm">{u.email}</td>
                   <td>{u.full_name}</td>
                   <td><span className={`badge ${u.role==='admin'?'over':u.role==='editor'?'warn':'active'}`}>{u.role}</span></td>
-                  <td><span className={`badge ${u.status==='Active'?'active':'closed'}`}>{u.status}</span></td>
+                  <td><span className={`badge ${isActive(u.status)?'active':'closed'}`}>{u.status}</span></td>
                   <td>
                     <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(u)} disabled={deleting===u.email||u.email===user.email}>
                       {deleting===u.email?'...':'🗑️'}
@@ -2361,7 +2397,7 @@ function MobileActualList() {
       <div style={{display:'flex',gap:8,marginBottom:14}}>
         <select className="form-select" style={{flex:2}} value={filterPid} onChange={e=>setFilterPid(e.target.value)}>
           <option value="all">Tất cả công trình</option>
-          {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+          {sortedProjects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
           {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
         </select>
         <input className="form-input" style={{flex:1,maxWidth:100}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} placeholder="MM/YYYY"/>
