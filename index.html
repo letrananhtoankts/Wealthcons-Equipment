@@ -358,40 +358,17 @@ const statusLabel = (pct) => {
 };
 const nowMonth = () => {
   const d = new Date();
-  // Lưu theo format DD/MM/YYYY để đồng bộ với dữ liệu sheet (ngày 01 mặc định)
-  return '01/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 };
-// parseMonth nhận cả 2 format:
-// - DD/MM/YYYY (từ sheet): "01/12/2023" → { month:12, year:2023 }
-// - MM/YYYY (nhập tay): "12/2023" → { month:12, year:2023 }
 const parseMonth = (s) => {
   if (!s) return null;
-  const parts = String(s).trim().split('/');
-  if (parts.length === 3) {
-    // DD/MM/YYYY
-    const month = parseInt(parts[1]);
-    const year = parseInt(parts[2]);
-    if (!isNaN(month) && !isNaN(year) && year > 1000) return { month, year };
-  }
-  if (parts.length === 2) {
-    // MM/YYYY
-    const month = parseInt(parts[0]);
-    const year = parseInt(parts[1]);
-    if (!isNaN(month) && !isNaN(year) && year > 1000) return { month, year };
-  }
-  return null;
+  const [m, y] = s.split('/');
+  return { month: parseInt(m), year: parseInt(y) };
 };
-// Label hiển thị trên chart: "T12/2023"
 const monthYear = (s) => {
   const p = parseMonth(s);
   if (!p) return s;
   return `T${p.month}/${p.year}`;
-};
-// Chuẩn hóa month key để group: "12/2023"
-const monthKey = (s) => {
-  const p = parseMonth(s);
-  if (!p) return s;
-  return `${String(p.month).padStart(2,'0')}/${p.year}`;
 };
 const todayStr = () => {
   const d = new Date();
@@ -492,30 +469,6 @@ const parseRows = (rows, fields) => {
     fields.forEach((f, i) => { obj[f] = row[i] || ''; });
     return obj;
   });
-};
-
-// Parse số tiền từ Google Sheets — xử lý cả 2 format:
-// - Số thuần: "11600000" → 11600000
-// - Có dấu phân cách ngàn VN: "11.600.000" → 11600000
-// - Có dấu phân cách ngàn quốc tế: "11,600,000" → 11600000
-const parseAmt = (v) => {
-  if (v === null || v === undefined || v === '') return 0;
-  const s = String(v).trim();
-  // Nếu là số thuần (không có dấu chấm/phẩy) → parse thẳng
-  if (/^\d+$/.test(s)) return parseInt(s, 10);
-  // Có dấu chấm VN kiểu 11.600.000 (tất cả dấu chấm là phân cách ngàn)
-  // Nhận biết: nếu sau dấu chấm cuối cùng có đúng 3 chữ số → đây là dấu ngàn
-  const dotParts = s.split('.');
-  if (dotParts.length > 1 && dotParts[dotParts.length-1].length === 3 && dotParts.every(p => /^\d+$/.test(p))) {
-    return parseInt(s.replace(/\./g, ''), 10);
-  }
-  // Có dấu phẩy ngàn kiểu 11,600,000
-  if (s.includes(',') && !s.includes('.')) {
-    return parseInt(s.replace(/,/g, ''), 10);
-  }
-  // Fallback: xóa hết ký tự không phải số rồi parse
-  const cleaned = s.replace(/[^\d]/g, '');
-  return cleaned ? parseInt(cleaned, 10) : 0;
 };
 
 // ============================================================
@@ -1112,89 +1065,75 @@ const projectStatusBadge = (s) => (s === 'Active' || s === 'Đang hoạt động
 function Dashboard({ user }) {
   const { projects, actuals, bids, budgets, suppliers, categories } = useData();
   const [yearFilter, setYearFilter] = useState('all');
-  const [monthFilter, setMonthFilter] = useState('all'); // 'all' | '01'..'12'
-  const [projectFilter, setProjectFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all'); // 'all' hoặc 1 project_id
   const [donutMode, setDonutMode] = useState('cat');
 
-  // Lấy danh sách năm thực tế từ data (dùng parseMonth mới)
   const years = [...new Set(actuals.map(a => parseMonth(a.month)?.year).filter(Boolean))].sort();
   const sortedProjects = sortProjects(projects);
 
   const filtered = actuals.filter(a => {
     const p = parseMonth(a.month);
-    if (!p) return false;
-    if (yearFilter !== 'all' && p.year !== parseInt(yearFilter)) return false;
-    if (monthFilter !== 'all' && p.month !== parseInt(monthFilter)) return false;
+    if (yearFilter !== 'all' && p?.year !== parseInt(yearFilter)) return false;
     if (projectFilter !== 'all' && a.project_id !== projectFilter) return false;
     return true;
   });
 
   const activePids = projectFilter === 'all'
-    ? projects.map(p => p.project_id)
+    ? projects.map(p => p.project_id) // tất cả dự án
     : [projectFilter];
 
-  const totalActual = filtered.reduce((s,a) => s+(parseAmt(a.amount)||0), 0);
-  const totalBid = bids.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseAmt(b.total_bid)||0), 0);
-  const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseAmt(b.total_budget)||0), 0);
+  const totalActual = filtered.reduce((s,a) => s+(parseFloat(a.amount)||0), 0);
+  const totalBid = bids.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_bid)||0), 0);
+  const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_budget)||0), 0);
   const pct = fmtPct(totalActual, totalBudget);
 
-  // Bar chart
-  const barProjects = sortedProjects.filter(p => isActive(p.status));
+  // Bar chart — chỉ hiện khi chọn "Tất cả"
+  const barProjects = sortedProjects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động');
   const barLabels = barProjects.map(p => p.short_name || p.project_id);
-  const barActual = barProjects.map(p => actuals.filter(a => {
-    const pm = parseMonth(a.month);
-    if (!pm) return false;
-    if (yearFilter !== 'all' && pm.year !== parseInt(yearFilter)) return false;
-    if (monthFilter !== 'all' && pm.month !== parseInt(monthFilter)) return false;
-    return a.project_id === p.project_id;
-  }).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
-  const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0));
-  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0));
+  const barActual = barProjects.map(p => actuals.filter(a => a.project_id === p.project_id && (yearFilter==='all'||parseMonth(a.month)?.year===parseInt(yearFilter))).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0));
+  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
 
   // Donut
   const COLORS = ['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#818cf8'];
-  const donutCatLabels = categories.map(c => c.name);
-  const donutCatData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
-  const nccSids = [...new Set(filtered.map(a=>a.supplier_id))];
-  const donutNccLabels = nccSids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-  const donutNccData = nccSids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
+  let donutLabels, donutData;
+  if (donutMode === 'cat') {
+    donutLabels = categories.map(c => c.name);
+    donutData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  } else {
+    const sids = [...new Set(filtered.map(a=>a.supplier_id))];
+    donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+    donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  }
 
-  // Timeline — group theo monthKey (MM/YYYY) để tránh trùng do format DD/MM/YYYY
-  const monthKeyMap = {}; // "MM/YYYY" → tổng amount
-  actuals.forEach(a => {
-    const p = parseMonth(a.month);
-    if (!p) return;
-    if (yearFilter !== 'all' && p.year !== parseInt(yearFilter)) return;
-    if (monthFilter !== 'all' && p.month !== parseInt(monthFilter)) return;
-    if (projectFilter !== 'all' && a.project_id !== projectFilter) return;
-    const key = `${String(p.month).padStart(2,'0')}/${p.year}`;
-    monthKeyMap[key] = (monthKeyMap[key]||0) + (parseAmt(a.amount)||0);
+  // Timeline
+  const allMonths = [...new Set(actuals.map(a=>a.month))].sort((a,b)=>{
+    const pa=parseMonth(a),pb=parseMonth(b);
+    if(!pa||!pb) return 0;
+    return (pa.year*12+pa.month)-(pb.year*12+pb.month);
   });
-  const displayMonths = Object.keys(monthKeyMap).sort((a,b) => {
-    const [ma,ya] = a.split('/').map(Number);
-    const [mb,yb] = b.split('/').map(Number);
-    return (ya*12+ma)-(yb*12+mb);
+  const displayMonths = allMonths.filter(m=>{
+    const p=parseMonth(m);
+    if(yearFilter!=='all'&&p?.year!==parseInt(yearFilter)) return false;
+    return true;
   });
-  const timelineActual = displayMonths.map(k => monthKeyMap[k]);
+  const timelineActual = displayMonths.map(m=>filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   let cum=0;
   const timelineCumul = timelineActual.map(v=>{cum+=v;return cum;});
-  const timelineLabels = displayMonths.map(k => { const [m,y]=k.split('/'); return `T${parseInt(m)}/${y}`; });
 
   // Bảng chi tiết: Công trình × Hạng mục
   const tableRows = [];
   const displayedProjects = projectFilter==='all' ? sortedProjects : sortedProjects.filter(p=>p.project_id===projectFilter);
   displayedProjects.forEach(p => {
     categories.forEach(c => {
-      const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
-      const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
-      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
+      const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+      const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
       if (catActual>0||catBudget>0||catBid>0) {
         tableRows.push({ project_id:p.project_id, project_name:p.project_name, cat_name:c.name, actual:catActual, budget:catBudget, bid:catBid, pct:fmtPct(catActual,catBudget), status:p.status });
       }
     });
   });
-
-  const MONTHS_VI = ['','T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
 
   return (
     <div>
@@ -1210,23 +1149,15 @@ function Dashboard({ user }) {
         {/* Filters desktop */}
         <div className="filter-bar">
           <span className="filter-label">Năm</span>
-          <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>{setYearFilter('all');setMonthFilter('all');}}>Tất cả</button>
-          {years.map(y=><button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>{setYearFilter(String(y));setMonthFilter('all');}}>{y}</button>)}
-          {yearFilter!=='all' && <>
-            <div className="filter-sep"/>
-            <span className="filter-label">Tháng</span>
-            <button className={`pill ${monthFilter==='all'?'active':''}`} onClick={()=>setMonthFilter('all')}>Tất cả</button>
-            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>(
-              <button key={m} className={`pill ${monthFilter===String(m)?'active':''}`} onClick={()=>setMonthFilter(String(m))}>T{m}</button>
-            ))}
-          </>}
+          <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>setYearFilter('all')}>Tất cả</button>
+          {years.map(y=><button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>setYearFilter(String(y))}>{y}</button>)}
           <div className="filter-sep"/>
           <span className="filter-label">Công trình</span>
           <select className="select-input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{minWidth:180}}>
             <option value="all">— Tất cả dự án —</option>
-            {sortedProjects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
-            {sortedProjects.filter(p=>!isActive(p.status)).length>0 && <option disabled>── Đã kết thúc ──</option>}
-            {sortedProjects.filter(p=>!isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').length>0 && <option disabled>── Đã kết thúc ──</option>}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
           </select>
         </div>
 
@@ -1266,9 +1197,9 @@ function Dashboard({ user }) {
               </tr></thead>
               <tbody>
                 {sortedProjects.map(p=>{
-                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
-                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
-                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
                   const p2 = fmtPct(pActual,pBudget);
                   if(pActual===0&&pBudget===0&&pBid===0) return null;
                   return (
@@ -1324,7 +1255,7 @@ function Dashboard({ user }) {
         <div className="card mb-20">
           <div className="card-header"><span className="card-title">Chi Phí Thực Tế Theo Tháng</span></div>
           <div className="card-body" style={{height:240}}>
-            <LineChart labels={timelineLabels} datasets={[
+            <LineChart labels={displayMonths.map(monthYear)} datasets={[
               {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
               {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
             ]}/>
@@ -1336,13 +1267,22 @@ function Dashboard({ user }) {
           <div className="card">
             <div className="card-header"><span className="card-title">Cơ Cấu Chi Phí — Theo Hạng Mục</span></div>
             <div className="card-body" style={{height:240}}>
-              <DonutChart labels={donutCatLabels} data={donutCatData} colors={COLORS}/>
+              <DonutChart
+                labels={categories.map(c=>c.name)}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                colors={COLORS}
+              />
             </div>
           </div>
           <div className="card">
             <div className="card-header"><span className="card-title">Cơ Cấu Chi Phí — Theo NCC</span></div>
             <div className="card-body" style={{height:240}}>
-              <DonutChart labels={donutNccLabels} data={donutNccData} colors={COLORS}/>
+              {(() => {
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))];
+                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+              })()}
             </div>
           </div>
         </div>
@@ -1388,21 +1328,15 @@ function Dashboard({ user }) {
       {/* MOBILE view */}
       <div className="mobile-only">
         {/* Mobile filters */}
-        <div style={{display:'flex',gap:8,marginBottom:8}}>
-          <select className="form-select" style={{flex:1}} value={yearFilter} onChange={e=>{setYearFilter(e.target.value);setMonthFilter('all');}}>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <select className="form-select" style={{flex:1}} value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
             <option value="all">Tất cả năm</option>
             {years.map(y=><option key={y} value={String(y)}>{y}</option>)}
           </select>
-          <select className="form-select" style={{flex:1}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} disabled={yearFilter==='all'}>
-            <option value="all">Tất cả tháng</option>
-            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m=><option key={m} value={String(m)}>Tháng {m}</option>)}
-          </select>
-        </div>
-        <div style={{marginBottom:14}}>
-          <select className="form-select" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
+          <select className="form-select" style={{flex:2}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
             <option value="all">Tất cả dự án</option>
-            {sortedProjects.filter(p=>isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
-            {sortedProjects.filter(p=>!isActive(p.status)).map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
+            {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
           </select>
         </div>
 
@@ -1436,9 +1370,9 @@ function Dashboard({ user }) {
               </tr></thead>
               <tbody>
                 {sortedProjects.map(p=>{
-                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
-                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
-                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
                   const p2 = fmtPct(pActual,pBudget);
                   if(pActual===0&&pBudget===0&&pBid===0) return null;
                   return (
@@ -1463,16 +1397,27 @@ function Dashboard({ user }) {
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+          {/* Donut 1: Hạng mục */}
           <div className="card">
             <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo Hạng Mục</div>
             <div style={{height:160}}>
-              <DonutChart labels={donutCatLabels} data={donutCatData} colors={COLORS}/>
+              <DonutChart
+                labels={categories.map(c=>c.name)}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                colors={COLORS}
+              />
             </div>
           </div>
+          {/* Donut 2: NCC */}
           <div className="card">
             <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo NCC</div>
             <div style={{height:160}}>
-              <DonutChart labels={donutNccLabels} data={donutNccData} colors={COLORS}/>
+              {(() => {
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
+                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+              })()}
             </div>
           </div>
         </div>
@@ -1481,7 +1426,7 @@ function Dashboard({ user }) {
         <div className="card mb-16">
           <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
           <div className="card-body" style={{height:180}}>
-            <LineChart labels={timelineLabels} datasets={[
+            <LineChart labels={displayMonths.map(monthYear)} datasets={[
               {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
               {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
             ]}/>
@@ -1547,7 +1492,7 @@ function ActualCostForm({ user, token, onClose, editData }) {
   });
   const [lines, setLines] = useState(
     isEdit
-      ? [{ category_code: editData.category_code, amount: editData.amount ? parseAmt(editData.amount).toLocaleString('vi-VN') : '', notes: editData.notes||'' }]
+      ? [{ category_code: editData.category_code, amount: editData.amount ? parseInt(editData.amount).toLocaleString('vi-VN') : '', notes: editData.notes||'' }]
       : [{ category_code:'', amount:'', notes:'' }]
   );
   const [saving, setSaving] = useState(false);
@@ -1688,20 +1633,7 @@ function ActualCostForm({ user, token, onClose, editData }) {
             </div>
             <div className="form-group">
               <label className="form-label required">Tháng phát sinh</label>
-              <input
-                className={`form-input ${errors.month?'error':''}`}
-                value={form.month}
-                onChange={e=>setWithAuto('month',e.target.value)}
-                onBlur={e=>{
-                  // Normalize: nếu user nhập MM/YYYY → đổi thành 01/MM/YYYY
-                  const v = e.target.value.trim();
-                  if (/^\d{1,2}\/\d{4}$/.test(v)) {
-                    const [m,y] = v.split('/');
-                    setWithAuto('month', `01/${m.padStart(2,'0')}/${y}`);
-                  }
-                }}
-                placeholder="MM/YYYY hoặc DD/MM/YYYY"
-              />
+              <input className={`form-input ${errors.month?'error':''}`} value={form.month} onChange={e=>setWithAuto('month',e.target.value)} placeholder="MM/YYYY" />
               {errors.month && <span className="form-error">{errors.month}</span>}
             </div>
             <div className="form-group">
@@ -1811,7 +1743,7 @@ function ActualCostList({ user, token }) {
 
   const pages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
-  const total = filtered.reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+  const total = filtered.reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
 
   const getProjectName = id => projects.find(p=>p.project_id===id)?.short_name || id;
   const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code || id;
@@ -1825,7 +1757,7 @@ function ActualCostList({ user, token }) {
       <div className="section-header mb-20">
         <div>
           <div className="section-title">Chi Phí Thực Tế</div>
-          <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}</div>
+          <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}</div>
         </div>
         {(user.role === 'admin' || user.role === 'editor') && (
           <button className="btn btn-primary" onClick={openAdd}>+ Nhập Chi Phí Mới</button>
@@ -1860,6 +1792,7 @@ function ActualCostList({ user, token }) {
         <div className="table-wrap">
           <table>
             <thead><tr>
+              <th>Mã CT</th>
               <th>Công trình</th>
               <th>NCC</th>
               <th>Hạng mục</th>
@@ -1872,14 +1805,15 @@ function ActualCostList({ user, token }) {
               <th></th>
             </tr></thead>
             <tbody>
-              {paged.length === 0 && <tr><td colSpan={10} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
+              {paged.length === 0 && <tr><td colSpan={11} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
               {paged.map(a => (
                 <tr key={a.cost_id}>
+                  <td className="mono text-sm text-muted">{a.cost_id}</td>
                   <td>{getProjectName(a.project_id)}</td>
                   <td className="text-sm">{getSupplierName(a.supplier_id)}</td>
                   <td><span className="badge active">{getCatName(a.category_code)}</span></td>
                   <td className="mono text-sm">{a.month}</td>
-                  <td className="mono text-right font-bold text-amber">{fmt(parseAmt(a.amount))}</td>
+                  <td className="mono text-right font-bold text-amber">{fmt(parseFloat(a.amount))}</td>
                   <td className="mono text-sm text-muted">{a.bill_ref}</td>
                   <td>{a.bill_pdf_url ? <a href={a.bill_pdf_url} target="_blank" rel="noopener noreferrer" style={{color:'var(--amber)',fontSize:11}}>📄 Xem</a> : <span className="text-muted text-sm">—</span>}</td>
                   <td className="text-sm text-muted">{a.input_date}</td>
@@ -2465,7 +2399,7 @@ function MobileActualList() {
               <div style={{fontWeight:600,fontSize:13}}>{getProjectName(a.project_id)}</div>
               <div className="mobile-cost-meta">{getSupplierName(a.supplier_id)} · {a.month}</div>
             </div>
-            <div className="mobile-cost-amount">{fmtB(parseAmt(a.amount))}</div>
+            <div className="mobile-cost-amount">{fmtB(parseFloat(a.amount))}</div>
           </div>
           <div className="mobile-cost-tags">
             <span className="badge active">{getCatName(a.category_code)}</span>
