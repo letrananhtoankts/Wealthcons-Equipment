@@ -360,15 +360,37 @@ const nowMonth = () => {
   const d = new Date();
   return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 };
+// Nhận cả 2 format:
+// - DD/MM/YYYY (sheet): "01/12/2023" → { month:12, year:2023 }
+// - MM/YYYY (nhập tay): "04/2026"   → { month:4,  year:2026 }
 const parseMonth = (s) => {
   if (!s) return null;
-  const [m, y] = s.split('/');
-  return { month: parseInt(m), year: parseInt(y) };
+  const parts = String(s).trim().split('/');
+  if (parts.length === 3) {
+    // DD/MM/YYYY
+    const month = parseInt(parts[1]);
+    const year  = parseInt(parts[2]);
+    if (!isNaN(month) && !isNaN(year) && year > 1000) return { month, year };
+  }
+  if (parts.length === 2) {
+    // MM/YYYY
+    const month = parseInt(parts[0]);
+    const year  = parseInt(parts[1]);
+    if (!isNaN(month) && !isNaN(year) && year > 1000) return { month, year };
+  }
+  return null;
 };
+// Label chart: "T4/2026"
 const monthYear = (s) => {
   const p = parseMonth(s);
   if (!p) return s;
   return `T${p.month}/${p.year}`;
+};
+// Key để group tháng (tránh trùng DD khác nhau cùng tháng): "04/2026"
+const monthKey = (s) => {
+  const p = parseMonth(s);
+  if (!p) return s;
+  return `${String(p.month).padStart(2,'0')}/${p.year}`;
 };
 const todayStr = () => {
   const d = new Date();
@@ -1065,21 +1087,25 @@ const projectStatusBadge = (s) => (s === 'Active' || s === 'Đang hoạt động
 function Dashboard({ user }) {
   const { projects, actuals, bids, budgets, suppliers, categories } = useData();
   const [yearFilter, setYearFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState('all'); // 'all' hoặc 1 project_id
+  const [monthFilter, setMonthFilter] = useState('all'); // 'all' | '1'..'12'
+  const [projectFilter, setProjectFilter] = useState('all');
   const [donutMode, setDonutMode] = useState('cat');
 
-  const years = [...new Set(actuals.map(a => parseMonth(a.month)?.year).filter(Boolean))].sort();
+  // Năm thực tế — parseMonth mới đọc đúng DD/MM/YYYY
+  const years = [...new Set(actuals.map(a => parseMonth(a.month)?.year).filter(y => y && y > 1000))].sort();
   const sortedProjects = sortProjects(projects);
 
   const filtered = actuals.filter(a => {
     const p = parseMonth(a.month);
-    if (yearFilter !== 'all' && p?.year !== parseInt(yearFilter)) return false;
+    if (!p) return false;
+    if (yearFilter !== 'all' && p.year !== parseInt(yearFilter)) return false;
+    if (monthFilter !== 'all' && p.month !== parseInt(monthFilter)) return false;
     if (projectFilter !== 'all' && a.project_id !== projectFilter) return false;
     return true;
   });
 
   const activePids = projectFilter === 'all'
-    ? projects.map(p => p.project_id) // tất cả dự án
+    ? projects.map(p => p.project_id)
     : [projectFilter];
 
   const totalActual = filtered.reduce((s,a) => s+(parseFloat(a.amount)||0), 0);
@@ -1087,39 +1113,45 @@ function Dashboard({ user }) {
   const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_budget)||0), 0);
   const pct = fmtPct(totalActual, totalBudget);
 
-  // Bar chart — chỉ hiện khi chọn "Tất cả"
+  // Bar chart
   const barProjects = sortedProjects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động');
   const barLabels = barProjects.map(p => p.short_name || p.project_id);
-  const barActual = barProjects.map(p => actuals.filter(a => a.project_id === p.project_id && (yearFilter==='all'||parseMonth(a.month)?.year===parseInt(yearFilter))).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  const barActual = barProjects.map(p => actuals.filter(a => {
+    const pm = parseMonth(a.month); if (!pm) return false;
+    if (yearFilter !== 'all' && pm.year !== parseInt(yearFilter)) return false;
+    if (monthFilter !== 'all' && pm.month !== parseInt(monthFilter)) return false;
+    return a.project_id === p.project_id;
+  }).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0));
-  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
+  const barBid    = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
 
   // Donut
   const COLORS = ['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#818cf8'];
   let donutLabels, donutData;
   if (donutMode === 'cat') {
     donutLabels = categories.map(c => c.name);
-    donutData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutData   = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   } else {
-    const sids = [...new Set(filtered.map(a=>a.supplier_id))];
+    const sids  = [...new Set(filtered.map(a=>a.supplier_id))];
     donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-    donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutData   = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
   }
 
-  // Timeline
-  const allMonths = [...new Set(actuals.map(a=>a.month))].sort((a,b)=>{
-    const pa=parseMonth(a),pb=parseMonth(b);
-    if(!pa||!pb) return 0;
-    return (pa.year*12+pa.month)-(pb.year*12+pb.month);
+  // Timeline — group theo monthKey để tránh trùng (DD/MM/YYYY → cùng tháng nhưng DD khác nhau)
+  const mkMap = {};
+  filtered.forEach(a => {
+    const key = monthKey(a.month);
+    if (key) mkMap[key] = (mkMap[key]||0) + (parseFloat(a.amount)||0);
   });
-  const displayMonths = allMonths.filter(m=>{
-    const p=parseMonth(m);
-    if(yearFilter!=='all'&&p?.year!==parseInt(yearFilter)) return false;
-    return true;
+  const displayMonths = Object.keys(mkMap).sort((a,b) => {
+    const [ma,ya] = a.split('/').map(Number);
+    const [mb,yb] = b.split('/').map(Number);
+    return (ya*12+ma)-(yb*12+mb);
   });
-  const timelineActual = displayMonths.map(m=>filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
-  let cum=0;
-  const timelineCumul = timelineActual.map(v=>{cum+=v;return cum;});
+  const timelineActual  = displayMonths.map(k => mkMap[k]);
+  let cum = 0;
+  const timelineCumul   = timelineActual.map(v=>{cum+=v;return cum;});
+  const timelineLabels  = displayMonths.map(k => { const [m,y]=k.split('/'); return `T${parseInt(m)}/${y}`; });
 
   // Bảng chi tiết: Công trình × Hạng mục
   const tableRows = [];
@@ -1128,10 +1160,9 @@ function Dashboard({ user }) {
     categories.forEach(c => {
       const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
       const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
-      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
-      if (catActual>0||catBudget>0||catBid>0) {
+      const catBid    = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+      if (catActual>0||catBudget>0||catBid>0)
         tableRows.push({ project_id:p.project_id, project_name:p.project_name, cat_name:c.name, actual:catActual, budget:catBudget, bid:catBid, pct:fmtPct(catActual,catBudget), status:p.status });
-      }
     });
   });
 
@@ -1149,8 +1180,16 @@ function Dashboard({ user }) {
         {/* Filters desktop */}
         <div className="filter-bar">
           <span className="filter-label">Năm</span>
-          <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>setYearFilter('all')}>Tất cả</button>
-          {years.map(y=><button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>setYearFilter(String(y))}>{y}</button>)}
+          <button className={`pill ${yearFilter==='all'?'active':''}`} onClick={()=>{setYearFilter('all');setMonthFilter('all');}}>Tất cả</button>
+          {years.map(y=><button key={y} className={`pill ${yearFilter===String(y)?'active':''}`} onClick={()=>{setYearFilter(String(y));setMonthFilter('all');}}>{y}</button>)}
+          {yearFilter!=='all' && <>
+            <div className="filter-sep"/>
+            <span className="filter-label">Tháng</span>
+            <button className={`pill ${monthFilter==='all'?'active':''}`} onClick={()=>setMonthFilter('all')}>Tất cả</button>
+            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>(
+              <button key={m} className={`pill ${monthFilter===String(m)?'active':''}`} onClick={()=>setMonthFilter(String(m))}>T{m}</button>
+            ))}
+          </>}
           <div className="filter-sep"/>
           <span className="filter-label">Công trình</span>
           <select className="select-input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{minWidth:180}}>
@@ -1255,7 +1294,7 @@ function Dashboard({ user }) {
         <div className="card mb-20">
           <div className="card-header"><span className="card-title">Chi Phí Thực Tế Theo Tháng</span></div>
           <div className="card-body" style={{height:240}}>
-            <LineChart labels={displayMonths.map(monthYear)} datasets={[
+            <LineChart labels={timelineLabels} datasets={[
               {label:'Thực tế tháng',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
               {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
             ]}/>
@@ -1328,12 +1367,18 @@ function Dashboard({ user }) {
       {/* MOBILE view */}
       <div className="mobile-only">
         {/* Mobile filters */}
-        <div style={{display:'flex',gap:8,marginBottom:14}}>
-          <select className="form-select" style={{flex:1}} value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <select className="form-select" style={{flex:1}} value={yearFilter} onChange={e=>{setYearFilter(e.target.value);setMonthFilter('all');}}>
             <option value="all">Tất cả năm</option>
             {years.map(y=><option key={y} value={String(y)}>{y}</option>)}
           </select>
-          <select className="form-select" style={{flex:2}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
+          <select className="form-select" style={{flex:1}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} disabled={yearFilter==='all'}>
+            <option value="all">Tất cả tháng</option>
+            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m=><option key={m} value={String(m)}>Tháng {m}</option>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}>
+          <select className="form-select" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
             <option value="all">Tất cả dự án</option>
             {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
@@ -1426,7 +1471,7 @@ function Dashboard({ user }) {
         <div className="card mb-16">
           <div className="card-header"><span className="card-title">Chi Phí Theo Tháng</span></div>
           <div className="card-body" style={{height:180}}>
-            <LineChart labels={displayMonths.map(monthYear)} datasets={[
+            <LineChart labels={timelineLabels} datasets={[
               {label:'Thực tế',data:timelineActual,backgroundColor:'rgba(245,158,11,0.7)',borderRadius:3,type:'bar',order:2},
               {label:'Lũy kế',data:timelineCumul,borderColor:'#60a5fa',backgroundColor:'transparent',type:'line',yAxisID:'y1',tension:0.3,pointRadius:2,order:1},
             ]}/>
@@ -1478,7 +1523,7 @@ function Dashboard({ user }) {
 // FORM NHẬP / SỬA CHI PHÍ THỰC TẾ
 // ============================================================
 function ActualCostForm({ user, token, onClose, editData }) {
-  const { projects, suppliers, actuals: allActuals, appendActual, updateActual, categories } = useData();
+  const { projects, suppliers, appendActual, updateActual, categories } = useData();
   const toast = useToast();
   const isEdit = !!editData;
 
@@ -1498,31 +1543,12 @@ function ActualCostForm({ user, token, onClose, editData }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [dupWarning, setDupWarning] = useState('');
 
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const setLine = (i,k,v) => setLines(ls=>ls.map((l,j)=>j===i?{...l,[k]:v}:l));
   const addLine = () => setLines(ls=>[...ls,{category_code:'',amount:'',notes:''}]);
   const removeLine = (i) => setLines(ls=>ls.filter((_,j)=>j!==i));
   const formatAmt = v => { const n=v.replace(/\D/g,''); return n?parseInt(n).toLocaleString('vi-VN'):''; };
-
-  // Auto-generate bill_ref + check trùng khi đủ 3 trường
-  const autoFill = (newForm) => {
-    const { project_id: pid, supplier_id: sid, month: mon } = newForm;
-    if (!pid || !sid || !mon || isEdit) return newForm;
-    // Tạo số chứng từ
-    const monCode = mon.replace('/', '_');
-    const autoRef = `BILL-${pid}-${sid}-${monCode}`;
-    // Check trùng
-    const dup = allActuals.find(a => a.project_id === pid && a.supplier_id === sid && a.month === mon);
-    setDupWarning(dup
-      ? `⚠️ Đã có bill cho ${sid} tại ${pid} tháng ${mon} (Mã CT: ${dup.cost_id}). Kiểm tra trước khi lưu tiếp.`
-      : ''
-    );
-    return { ...newForm, bill_ref: autoRef };
-  };
-
-  const setWithAuto = (k, v) => setForm(f => autoFill({ ...f, [k]: v }));
 
   // Upload PDF lên Drive
   const handlePdfUpload = async (file) => {
@@ -1609,15 +1635,10 @@ function ActualCostForm({ user, token, onClose, editData }) {
 
           {/* Thông tin chứng từ */}
           <div style={{marginBottom:12,fontWeight:600,fontSize:12,color:'var(--amber)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Thông tin chứng từ</div>
-          {dupWarning && (
-            <div className="alert warning" style={{marginBottom:12}}>
-              <span>⚠</span><span>{dupWarning}</span>
-            </div>
-          )}
           <div className="form-grid cols2" style={{marginBottom:16}}>
             <div className="form-group">
               <label className="form-label required">Công trình</label>
-              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>setWithAuto('project_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+              <select className={`form-select ${errors.project_id?'error':''}`} value={form.project_id} onChange={e=>set('project_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
                 <option value="">— Chọn —</option>
                 {projects.filter(p=>p.status==='Active').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
               </select>
@@ -1625,7 +1646,7 @@ function ActualCostForm({ user, token, onClose, editData }) {
             </div>
             <div className="form-group">
               <label className="form-label required">Nhà cung cấp</label>
-              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>setWithAuto('supplier_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
+              <select className={`form-select ${errors.supplier_id?'error':''}`} value={form.supplier_id} onChange={e=>set('supplier_id',e.target.value)} disabled={isEdit} style={isEdit?{opacity:0.6}:{}}>
                 <option value="">— Chọn —</option>
                 {suppliers.filter(s=>s.status==='Active').map(s=><option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}
               </select>
@@ -1633,13 +1654,12 @@ function ActualCostForm({ user, token, onClose, editData }) {
             </div>
             <div className="form-group">
               <label className="form-label required">Tháng phát sinh</label>
-              <input className={`form-input ${errors.month?'error':''}`} value={form.month} onChange={e=>setWithAuto('month',e.target.value)} placeholder="MM/YYYY" />
+              <input className={`form-input ${errors.month?'error':''}`} value={form.month} onChange={e=>set('month',e.target.value)} placeholder="MM/YYYY" />
               {errors.month && <span className="form-error">{errors.month}</span>}
             </div>
             <div className="form-group">
               <label className="form-label required">Số chứng từ</label>
-              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="Tự điền khi chọn đủ 3 trường trên" />
-              <span className="form-hint">Tự động: BILL-{'{DA}'}-{'{NCC}'}-{'{MM_YYYY}'} · Có thể sửa tay</span>
+              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="BILL-TT-001" />
               {errors.bill_ref && <span className="form-error">{errors.bill_ref}</span>}
             </div>
           </div>
