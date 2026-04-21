@@ -1188,7 +1188,7 @@ function Dashboard({ user }) {
       const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
       const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
       const catBid    = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
-      if (catActual>0||catBudget>0||catBid>0)
+      if (catActual>0||(!supplierFilter || supplierFilter==='all') && (catBudget>0||catBid>0))
         tableRows.push({ project_id:p.project_id, project_name:p.project_name, cat_name:c.name, actual:catActual, budget:catBudget, bid:catBid, pct:fmtPct(catActual,catBudget), status:p.status });
     });
   });
@@ -1858,6 +1858,7 @@ function ActualCostList({ user, token }) {
   const [editData, setEditData] = useState(null);
   const [filterPid, setFilterPid] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
+  const [filterNcc, setFilterNcc] = useState('all');
   const [filterMonth, setFilterMonth] = useState('');
   const [page, setPage] = useState(1);
   const PER_PAGE = 20;
@@ -1865,6 +1866,7 @@ function ActualCostList({ user, token }) {
   const filtered = actuals.filter(a => {
     if (filterPid !== 'all' && a.project_id !== filterPid) return false;
     if (filterCat !== 'all' && a.category_code !== filterCat) return false;
+    if (filterNcc !== 'all' && a.supplier_id !== filterNcc) return false;
     if (filterMonth && !a.month.includes(filterMonth)) return false;
     return true;
   }).sort((a,b) => {
@@ -1876,6 +1878,11 @@ function ActualCostList({ user, token }) {
   const pages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
   const total = filtered.reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+  const totalAll = actuals.reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+  const isFiltering = filterPid!=='all' || filterCat!=='all' || filterNcc!=='all' || filterMonth;
+
+  // Danh sách NCC có trong actuals
+  const nccIds = [...new Set(actuals.map(a=>a.supplier_id))].filter(Boolean).sort();
 
   const getProjectName = id => projects.find(p=>p.project_id===id)?.short_name || id;
   const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code || id;
@@ -1889,7 +1896,10 @@ function ActualCostList({ user, token }) {
       <div className="section-header mb-20">
         <div>
           <div className="section-title">Chi Phí Thực Tế</div>
-          <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}</div>
+          <div className="section-sub">
+            {actuals.length} bản ghi · Tổng tất cả: {fmtB(totalAll)}
+            {isFiltering && <span style={{color:'var(--amber)',fontWeight:600,marginLeft:8}}>· Đang lọc: {filtered.length} bản ghi · {fmtB(total)}</span>}
+          </div>
         </div>
         {(user.role === 'admin' || user.role === 'editor') && (
           <button className="btn btn-primary" onClick={openAdd}>+ Nhập Chi Phí Mới</button>
@@ -1899,24 +1909,31 @@ function ActualCostList({ user, token }) {
       {/* Filters */}
       <div className="card mb-16">
         <div className="card-body" style={{padding:'14px 18px'}}>
-          <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
-            <div className="form-group" style={{margin:0,minWidth:160}}>
-              <select className="form-select" value={filterPid} onChange={e=>{setFilterPid(e.target.value);setPage(1);}}>
-                <option value="all">Tất cả công trình</option>
-                {projects.map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
-              </select>
-            </div>
-            <div className="form-group" style={{margin:0,minWidth:140}}>
-              <select className="form-select" value={filterCat} onChange={e=>{setFilterCat(e.target.value);setPage(1);}}>
-                <option value="all">Tất cả hạng mục</option>
-                {categories.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="form-group" style={{margin:0}}>
-              <input className="form-input" style={{width:110}} value={filterMonth} onChange={e=>{setFilterMonth(e.target.value);setPage(1);}} placeholder="MM/YYYY" />
-            </div>
-            <span style={{fontSize:12,color:'var(--text3)'}}>→ {filtered.length} kết quả · {fmtB(total)}</span>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
+            <select className="form-select" style={{minWidth:160,flex:'1 1 140px'}} value={filterPid} onChange={e=>{setFilterPid(e.target.value);setPage(1);}}>
+              <option value="all">Tất cả công trình</option>
+              {projects.map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+            </select>
+            <select className="form-select" style={{minWidth:140,flex:'1 1 130px'}} value={filterCat} onChange={e=>{setFilterCat(e.target.value);setPage(1);}}>
+              <option value="all">Tất cả hạng mục</option>
+              {categories.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
+            </select>
+            <select className="form-select" style={{minWidth:140,flex:'1 1 130px'}} value={filterNcc} onChange={e=>{setFilterNcc(e.target.value);setPage(1);}}>
+              <option value="all">Tất cả NCC</option>
+              {nccIds.map(sid=><option key={sid} value={sid}>{sid}</option>)}
+            </select>
+            <input className="form-input" style={{width:110,flex:'0 0 110px'}} value={filterMonth} onChange={e=>{setFilterMonth(e.target.value);setPage(1);}} placeholder="MM/YYYY" />
+            {isFiltering && (
+              <button className="btn btn-secondary btn-sm" onClick={()=>{setFilterPid('all');setFilterCat('all');setFilterNcc('all');setFilterMonth('');setPage(1);}}>
+                ✕ Xóa filter
+              </button>
+            )}
           </div>
+          {isFiltering && (
+            <div style={{marginTop:10,padding:'8px 12px',background:'var(--amber-dim)',borderRadius:7,fontSize:12,color:'var(--amber)',fontWeight:600}}>
+              Kết quả lọc: {filtered.length} bản ghi · Tổng: {fmtB(total)}
+            </div>
+          )}
         </div>
       </div>
 
