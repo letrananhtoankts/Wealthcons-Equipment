@@ -493,6 +493,21 @@ const parseRows = (rows, fields) => {
   });
 };
 
+// Parse số tiền — xử lý cả 2 format:
+// "11600000" → 11600000 | "11.600.000" (VN) → 11600000 | "11,600,000" → 11600000
+const parseAmt = (v) => {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const dotParts = s.split('.');
+  if (dotParts.length > 1 && dotParts[dotParts.length-1].length === 3 && dotParts.every(p => /^\d+$/.test(p))) {
+    return parseInt(s.replace(/\./g, ''), 10);
+  }
+  if (s.includes(',') && !s.includes('.')) return parseInt(s.replace(/,/g, ''), 10);
+  const cleaned = s.replace(/[^\d]/g, '');
+  return cleaned ? parseInt(cleaned, 10) : 0;
+};
+
 // ============================================================
 // TOAST
 // ============================================================
