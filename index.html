@@ -1108,8 +1108,9 @@ const projectStatusBadge = (s) => (s === 'Active' || s === 'Đang hoạt động
 function Dashboard({ user }) {
   const { projects, actuals, bids, budgets, suppliers, categories } = useData();
   const [yearFilter, setYearFilter] = useState('all');
-  const [monthFilter, setMonthFilter] = useState('all'); // 'all' | '1'..'12'
+  const [monthFilter, setMonthFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
+  const [supplierFilter, setSupplierFilter] = useState('all');
   const [donutMode, setDonutMode] = useState('cat');
 
   // Năm thực tế — parseMonth mới đọc đúng DD/MM/YYYY
@@ -1122,8 +1123,12 @@ function Dashboard({ user }) {
     if (yearFilter !== 'all' && p.year !== parseInt(yearFilter)) return false;
     if (monthFilter !== 'all' && p.month !== parseInt(monthFilter)) return false;
     if (projectFilter !== 'all' && a.project_id !== projectFilter) return false;
+    if (supplierFilter !== 'all' && a.supplier_id !== supplierFilter) return false;
     return true;
   });
+
+  // Danh sách NCC có trong actuals (để filter)
+  const activeSupplierIds = [...new Set(actuals.map(a => a.supplier_id))].filter(Boolean);
 
   const activePids = projectFilter === 'all'
     ? projects.map(p => p.project_id)
@@ -1219,6 +1224,15 @@ function Dashboard({ user }) {
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').length>0 && <option disabled>── Đã kết thúc ──</option>}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
           </select>
+          <div className="filter-sep"/>
+          <span className="filter-label">NCC</span>
+          <select className="select-input" value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} style={{minWidth:160}}>
+            <option value="all">— Tất cả NCC —</option>
+            {activeSupplierIds.sort().map(sid => {
+              const s = suppliers.find(s=>s.supplier_id===sid);
+              return <option key={sid} value={sid}>{s?.supplier_name||sid}</option>;
+            })}
+          </select>
         </div>
 
         {/* 1. KPI cards */}
@@ -1290,7 +1304,52 @@ function Dashboard({ user }) {
           </div>
         </div>
 
-        {/* 3. Bar chart (chỉ khi Tất cả) */}
+        {/* 3. Bảng chi tiết theo NCC — hiện khi chọn NCC cụ thể */}
+        {supplierFilter !== 'all' && (() => {
+          const sup = suppliers.find(s=>s.supplier_id===supplierFilter);
+          // Group theo: Dự án → Hạng mục → tổng tiền
+          const nccRows = [];
+          sortedProjects.forEach(p => {
+            categories.forEach(c => {
+              const amt = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+              if (amt > 0) nccRows.push({ project_name:p.project_name, project_id:p.project_id, cat_name:c.name, amt });
+            });
+          });
+          const nccTotal = nccRows.reduce((s,r)=>s+r.amt,0);
+          return (
+            <div className="card mb-20">
+              <div className="card-header">
+                <span className="card-title">Chi Tiết — {sup?.supplier_name||supplierFilter}</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--amber)',fontWeight:700}}>Tổng: {fmtB(nccTotal)}</span>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>Công trình</th>
+                    <th>Hạng mục</th>
+                    <th className="text-right">Thực tế</th>
+                  </tr></thead>
+                  <tbody>
+                    {nccRows.length===0 && <tr><td colSpan={3} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
+                    {nccRows.map((r,i)=>(
+                      <tr key={i}>
+                        <td><div style={{fontWeight:500}}>{r.project_name}</div><div style={{fontSize:11,color:'var(--text3)'}}>{r.project_id}</div></td>
+                        <td className="text-sm">{r.cat_name}</td>
+                        <td className="mono text-right text-amber font-bold">{fmtB(r.amt)}</td>
+                      </tr>
+                    ))}
+                    <tr className="total-row">
+                      <td colSpan={2} style={{fontWeight:700}}>TỔNG CỘNG</td>
+                      <td className="mono text-right font-bold text-amber">{fmtB(nccTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 4. Bar chart (chỉ khi Tất cả) */}
         {projectFilter==='all' && (
           <div className="card mb-20">
             <div className="card-header">
@@ -1398,11 +1457,18 @@ function Dashboard({ user }) {
             {[1,2,3,4,5,6,7,8,9,10,11,12].map(m=><option key={m} value={String(m)}>Tháng {m}</option>)}
           </select>
         </div>
-        <div style={{marginBottom:14}}>
-          <select className="form-select" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <select className="form-select" style={{flex:1}} value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}>
             <option value="all">Tất cả dự án</option>
             {sortedProjects.filter(p=>p.status==='Active'||p.status==='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
             {sortedProjects.filter(p=>p.status!=='Active'&&p.status!=='Đang hoạt động').map(p=><option key={p.project_id} value={p.project_id}>{p.project_name} (KT)</option>)}
+          </select>
+          <select className="form-select" style={{flex:1}} value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}>
+            <option value="all">Tất cả NCC</option>
+            {activeSupplierIds.sort().map(sid => {
+              const s = suppliers.find(s=>s.supplier_id===sid);
+              return <option key={sid} value={sid}>{s?.short_code||sid}</option>;
+            })}
           </select>
         </div>
 
