@@ -35,8 +35,8 @@
     --mono: 'IBM Plex Mono', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: var(--navy); color: var(--text); min-height: 100vh; font-size: 14px; }
-  #root { display: flex; min-height: 100vh; }
+  body { font-family: var(--font); background: var(--navy); color: var(--text); min-height: 100vh; font-size: 14px; overflow-x: hidden; }
+  #root { display: flex; min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
 
   /* SIDEBAR — Desktop only */
   .sidebar { width: 220px; min-height: 100vh; background: var(--navy2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 100; }
@@ -265,10 +265,10 @@
   /* RESPONSIVE */
   @media (max-width: 768px) {
     .sidebar { display: none; }
-    .main { margin-left: 0; padding-bottom: 60px; }
+    .main { margin-left: 0; padding-bottom: 60px; max-width: 100vw; overflow-x: hidden; }
     .topbar { padding: 0 16px; }
     .topbar-meta { display: none; }
-    .content { padding: 16px; }
+    .content { padding: 16px; max-width: 100%; overflow-x: hidden; }
     .kpi-grid { grid-template-columns: 1fr; gap: 10px; }
     .chart-grid { grid-template-columns: 1fr; }
     .form-grid.cols2, .form-grid.cols3 { grid-template-columns: 1fr; }
@@ -276,8 +276,9 @@
     .mobile-tabbar { display: flex; }
     .toast-container { top: auto; bottom: 70px; right: 12px; left: 12px; }
     .toast { min-width: unset; }
-    /* Ẩn các nút nhập liệu trên mobile */
     .desktop-only { display: none !important; }
+    .card { max-width: 100%; }
+    .filter-bar { max-width: 100%; }
   }
   @media (min-width: 769px) {
     .mobile-only { display: none !important; }
@@ -983,10 +984,9 @@ function BarChart({ data, labels, datasets }) {
   return <canvas ref={ref} style={{width:'100%',height:'220px'}} />;
 }
 
-function DonutChart({ labels, data, colors, showPctLabels = false }) {
+function DonutChart({ labels, data, colors, isMobile = false }) {
   const ref = useRef();
   const chartRef = useRef();
-  const isMobile = window.innerWidth <= 768;
 
   // Lọc bỏ các item có giá trị 0 trước khi render
   const filtered = labels.map((l,i) => ({ label:l, value:data[i]||0, color:colors[i%colors.length] }))
@@ -1229,8 +1229,9 @@ function Dashboard({ user }) {
           <select className="select-input" value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} style={{minWidth:160}}>
             <option value="all">— Tất cả NCC —</option>
             {activeSupplierIds.sort().map(sid => {
-              const s = suppliers.find(s=>s.supplier_id===sid);
-              return <option key={sid} value={sid}>{s?.supplier_name||sid}</option>;
+              const s = suppliers.find(x=>x.supplier_id===sid);
+              const label = s ? `${sid} — ${s.supplier_name}` : sid;
+              return <option key={sid} value={sid}>{label}</option>;
             })}
           </select>
         </div>
@@ -1465,10 +1466,7 @@ function Dashboard({ user }) {
           </select>
           <select className="form-select" style={{flex:1}} value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}>
             <option value="all">Tất cả NCC</option>
-            {activeSupplierIds.sort().map(sid => {
-              const s = suppliers.find(s=>s.supplier_id===sid);
-              return <option key={sid} value={sid}>{s?.short_code||sid}</option>;
-            })}
+            {activeSupplierIds.sort().map(sid => <option key={sid} value={sid}>{sid}</option>)}
           </select>
         </div>
 
@@ -1491,14 +1489,14 @@ function Dashboard({ user }) {
         {/* Bảng 1: Tổng theo Dự án — ngay dưới KPI */}
         <div className="card mb-16">
           <div className="card-header"><span className="card-title">Tổng Hợp Theo Dự Án</span></div>
-          <div style={{overflowX:'auto'}}>
-            <table className="mobile-summary-table">
+          <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:10,whiteSpace:'nowrap'}}>
               <thead><tr>
-                <th>Dự án</th>
-                <th style={{textAlign:'right'}}>Thực tế</th>
-                <th style={{textAlign:'right'}}>Dự trù</th>
-                <th style={{textAlign:'right'}}>Đấu thầu</th>
-                <th style={{textAlign:'right'}}>Tỉ lệ</th>
+                <th style={{padding:'8px 8px',textAlign:'left',fontSize:9,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'var(--text3)',borderBottom:'1px solid var(--border)'}}>Dự án</th>
+                <th style={{padding:'8px 6px',textAlign:'right',fontSize:9,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'var(--text3)',borderBottom:'1px solid var(--border)'}}>Thực tế</th>
+                <th style={{padding:'8px 6px',textAlign:'right',fontSize:9,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'var(--text3)',borderBottom:'1px solid var(--border)'}}>Dự trù</th>
+                <th style={{padding:'8px 6px',textAlign:'right',fontSize:9,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'var(--text3)',borderBottom:'1px solid var(--border)'}}>Đấu thầu</th>
+                <th style={{padding:'8px 6px',textAlign:'right',fontSize:9,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'var(--text3)',borderBottom:'1px solid var(--border)'}}>%DT</th>
               </tr></thead>
               <tbody>
                 {sortedProjects.map(p=>{
@@ -1508,21 +1506,21 @@ function Dashboard({ user }) {
                   const p2 = fmtPct(pActual,pBudget);
                   if(pActual===0&&pBudget===0&&pBid===0) return null;
                   return (
-                    <tr key={p.project_id}>
-                      <td style={{fontSize:11,fontWeight:600}}>{p.short_name||p.project_id}</td>
-                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:'var(--amber)',fontWeight:700}}>{fmtB(pActual)}</td>
-                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBudget)}</td>
-                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBid)}</td>
-                      <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:p2>100?'var(--red)':p2>80?'var(--yellow)':'var(--green)'}}>{p2!==null?p2+'%':'—'}</td>
+                    <tr key={p.project_id} style={{borderBottom:'1px solid var(--border2)'}}>
+                      <td style={{padding:'8px 8px',fontSize:11,fontWeight:600}}>{p.short_name||p.project_id}</td>
+                      <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,color:'var(--amber)',fontWeight:700}}>{fmtB(pActual)}</td>
+                      <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBudget)}</td>
+                      <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11}}>{fmtB(pBid)}</td>
+                      <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:p2>100?'var(--red)':p2>80?'var(--yellow)':'var(--green)'}}>{p2!==null?p2+'%':'—'}</td>
                     </tr>
                   );
                 })}
-                <tr className="total-row">
-                  <td style={{fontWeight:700,fontSize:11}}>TỔNG</td>
-                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:'var(--amber)'}}>{fmtB(totalActual)}</td>
-                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBudget)}</td>
-                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBid)}</td>
-                  <td style={{textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
+                <tr style={{background:'rgba(245,158,11,0.05)',borderTop:'1px solid var(--border)'}}>
+                  <td style={{padding:'8px 8px',fontWeight:700,fontSize:11}}>TỔNG</td>
+                  <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:'var(--amber)'}}>{fmtB(totalActual)}</td>
+                  <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBudget)}</td>
+                  <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700}}>{fmtB(totalBid)}</td>
+                  <td style={{padding:'8px 6px',textAlign:'right',fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:pct>100?'var(--red)':pct>80?'var(--yellow)':'var(--green)'}}>{pct!==null?pct+'%':'—'}</td>
                 </tr>
               </tbody>
             </table>
@@ -1532,23 +1530,24 @@ function Dashboard({ user }) {
           {/* Donut 1: Hạng mục */}
           <div className="card">
             <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo Hạng Mục</div>
-            <div style={{height:160}}>
+            <div style={{height:180}}>
               <DonutChart
                 labels={categories.map(c=>c.name)}
                 data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}
                 colors={COLORS}
+                isMobile={true}
               />
             </div>
           </div>
           {/* Donut 2: NCC */}
           <div className="card">
             <div style={{padding:'10px 12px 4px',fontSize:12,fontWeight:600,color:'var(--text)'}}>Theo NCC</div>
-            <div style={{height:160}}>
+            <div style={{height:180}}>
               {(() => {
-                const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
-                const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
+                const sids = [...new Set(filtered.map(a=>a.supplier_id))].filter(Boolean);
+                const nccLabels = sids.map(sid=>sid);
                 const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
-                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
+                return <DonutChart labels={nccLabels} data={nccData} colors={COLORS} isMobile={true}/>;
               })()}
             </div>
           </div>
