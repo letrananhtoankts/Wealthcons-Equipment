@@ -1238,23 +1238,35 @@ function Dashboard({ user }) {
         </div>
 
         {/* 1. KPI cards */}
-        <div className="kpi-grid">
-          <div className="kpi-card actual">
-            <div className="kpi-label">Chi Phí Thực Tế</div>
-            <div className="kpi-value">{fmtB(totalActual).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-            {pct!==null&&<div className={`kpi-diff ${statusBadge(pct)}`}>{pct}% so với dự trù</div>}
-          </div>
-          <div className="kpi-card budget">
-            <div className="kpi-label">Dự Trù Chi Phí</div>
-            <div className="kpi-value">{fmtB(totalBudget).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-            <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Ngân sách nội bộ</div>
-          </div>
-          <div className="kpi-card bid">
-            <div className="kpi-label">Giá Trị Đấu Thầu</div>
-            <div className="kpi-value">{fmtB(totalBid).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
-            <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Giá hợp đồng ban đầu</div>
-          </div>
-        </div>
+        {/* Dự trù & Đấu thầu chỉ hiện khi: tổng tất cả HOẶC lọc theo 1 dự án cụ thể */}
+        {(() => {
+          const showBudgetBid = projectFilter !== 'all'
+            || (yearFilter === 'all' && monthFilter === 'all' && supplierFilter === 'all');
+          return (
+            <div className="kpi-grid" style={!showBudgetBid ? {gridTemplateColumns:'1fr'} : {}}>
+              <div className="kpi-card actual">
+                <div className="kpi-label">Chi Phí Thực Tế</div>
+                <div className="kpi-value">{fmtB(totalActual).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+                {showBudgetBid && pct!==null && <div className={`kpi-diff ${statusBadge(pct)}`}>{pct}% so với dự trù</div>}
+                {!showBudgetBid && <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>
+                  {yearFilter!=='all'?`Năm ${yearFilter}`:''}{monthFilter!=='all'?` · Tháng ${monthFilter}`:''}{supplierFilter!=='all'?` · ${supplierFilter}`:''}
+                </div>}
+              </div>
+              {showBudgetBid && <>
+                <div className="kpi-card budget">
+                  <div className="kpi-label">Dự Trù Chi Phí</div>
+                  <div className="kpi-value">{fmtB(totalBudget).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+                  <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Ngân sách nội bộ</div>
+                </div>
+                <div className="kpi-card bid">
+                  <div className="kpi-label">Giá Trị Đấu Thầu</div>
+                  <div className="kpi-value">{fmtB(totalBid).replace(' tỷ','')}<span className="kpi-unit">tỷ VNĐ</span></div>
+                  <div style={{marginTop:8,fontSize:12,color:'var(--text3)'}}>Giá hợp đồng ban đầu</div>
+                </div>
+              </>}
+            </div>
+          );
+        })()}
 
         {/* 2. Bảng tổng hợp theo dự án — ngay dưới KPI */}
         <div className="card mb-20">
@@ -1472,20 +1484,33 @@ function Dashboard({ user }) {
         </div>
 
         {/* 3 KPI ngang — fix 1 */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-          {[
-            {label:'Thực Tế',val:totalActual,cls:'actual',color:'var(--amber)',sub:pct!==null?pct+'% DT':null},
-            {label:'Dự Trù',val:totalBudget,cls:'budget',color:'#60a5fa',sub:null},
-            {label:'Đấu Thầu',val:totalBid,cls:'bid',color:'#a78bfa',sub:null},
-          ].map(k=>(
-            <div key={k.cls} className={`kpi-card ${k.cls}`} style={{padding:'12px 10px',textAlign:'center'}}>
-              <div style={{fontSize:10,fontWeight:700,letterSpacing:'0.06em',color:'var(--text3)',textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
-              <div style={{fontSize:18,fontWeight:700,fontFamily:'var(--mono)',color:k.color,lineHeight:1}}>{fmtB(k.val).replace(' tỷ','')}</div>
-              <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>tỷ VNĐ</div>
-              {k.sub && <div style={{fontSize:10,color:k.color,marginTop:4,fontWeight:600}}>{k.sub}</div>}
+        {(() => {
+          const showBB = projectFilter !== 'all'
+            || (yearFilter === 'all' && monthFilter === 'all' && supplierFilter === 'all');
+          const kpis = showBB
+            ? [
+                {label:'Thực Tế',val:totalActual,cls:'actual',color:'var(--amber)',sub:pct!==null?pct+'% DT':null},
+                {label:'Dự Trù',val:totalBudget,cls:'budget',color:'#60a5fa',sub:null},
+                {label:'Đấu Thầu',val:totalBid,cls:'bid',color:'#a78bfa',sub:null},
+              ]
+            : [
+                {label:'Thực Tế',val:totalActual,cls:'actual',color:'var(--amber)',sub:
+                  [yearFilter!=='all'?`Năm ${yearFilter}`:null, monthFilter!=='all'?`T${monthFilter}`:null, supplierFilter!=='all'?supplierFilter:null].filter(Boolean).join(' · ')
+                },
+              ];
+          return (
+            <div style={{display:'grid',gridTemplateColumns:showBB?'1fr 1fr 1fr':'1fr',gap:8,marginBottom:16}}>
+              {kpis.map(k=>(
+                <div key={k.cls} className={`kpi-card ${k.cls}`} style={{padding:'12px 10px',textAlign:'center'}}>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:'0.06em',color:'var(--text3)',textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
+                  <div style={{fontSize:showBB?18:24,fontWeight:700,fontFamily:'var(--mono)',color:k.color,lineHeight:1}}>{fmtB(k.val).replace(' tỷ','')}</div>
+                  <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>tỷ VNĐ</div>
+                  {k.sub && <div style={{fontSize:10,color:k.color,marginTop:4,fontWeight:600}}>{k.sub}</div>}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         {/* Bảng 1: Tổng theo Dự án — ngay dưới KPI */}
         <div className="card mb-16">
