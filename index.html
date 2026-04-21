@@ -327,11 +327,19 @@ const fmt = (n) => {
   if (!n && n !== 0) return '—';
   return Number(n).toLocaleString('vi-VN');
 };
-const fmtB = (n) => {
-  if (!n && n !== 0) return '—';
-  const b = n / 1e9;
-  return b.toFixed(2) + ' tỷ';
+// Đơn vị động: ≥1 tỷ → X.XX tỷ | ≥1 triệu → XXX tr | còn lại → số nguyên
+const fmtM = (n) => {
+  if (n === null || n === undefined || n === '') return '—';
+  const num = parseFloat(n);
+  if (isNaN(num)) return '—';
+  if (num === 0) return '0';
+  const abs = Math.abs(num);
+  if (abs >= 1e9) return (num/1e9).toFixed(2) + ' tỷ';
+  if (abs >= 1e6) return Math.round(num/1e6) + ' tr';
+  return Math.round(num).toLocaleString('vi-VN');
 };
+// Giữ fmtB cho backward compat — dùng fmtM từ giờ
+const fmtB = fmtM;
 const fmtPct = (a, b) => {
   if (!b || b === 0) return null;
   return Math.round((a / b) * 100);
@@ -400,7 +408,32 @@ const sheetsUpdate = async (token, range, values) => {
   return await res.json();
 };
 
-// Upload PDF lên Google Drive
+// Xóa 1 dòng trong sheet theo row number (dùng batchUpdate deleteRows)
+const sheetsDeleteRow = async (token, sheetId, rowIndex) => {
+  // rowIndex: 0-based
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}:batchUpdate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: rowIndex, endIndex: rowIndex + 1 }
+        }
+      }]
+    }),
+  });
+  if (!res.ok) throw new Error('Delete row error: ' + res.status);
+};
+
+// Lấy sheetId theo tên sheet
+const getSheetId = async (token, sheetName) => {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}?fields=sheets.properties`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  const sheet = data.sheets?.find(s => s.properties.title === sheetName);
+  return sheet?.properties?.sheetId ?? null;
+};
 const driveUpload = async (token, file, fileName) => {
   // Bước 1: Tạo metadata
   const metadata = {
@@ -821,6 +854,33 @@ function DataProvider({ user, token, children }) {
     }
   };
 
+  // DELETE PROJECT
+  const deleteProject = async (projectId) => {
+    const rowNum = await sheetsFindRow(token, 'PROJECTS', projectId);
+    if (rowNum < 0) throw new Error('Không tìm thấy dự án trong sheet');
+    const sheetId = await getSheetId(token, 'PROJECTS');
+    await sheetsDeleteRow(token, sheetId, rowNum - 1); // 0-based
+    setProjects(prev => prev.filter(p => p.project_id !== projectId));
+  };
+
+  // DELETE SUPPLIER
+  const deleteSupplier = async (supplierId) => {
+    const rowNum = await sheetsFindRow(token, 'SUPPLIERS', supplierId);
+    if (rowNum < 0) throw new Error('Không tìm thấy NCC trong sheet');
+    const sheetId = await getSheetId(token, 'SUPPLIERS');
+    await sheetsDeleteRow(token, sheetId, rowNum - 1);
+    setSuppliers(prev => prev.filter(s => s.supplier_id !== supplierId));
+  };
+
+  // DELETE USER
+  const deleteUser = async (email) => {
+    const rowNum = await sheetsFindRow(token, 'USERS', email);
+    if (rowNum < 0) throw new Error('Không tìm thấy user trong sheet');
+    const sheetId = await getSheetId(token, 'USERS');
+    await sheetsDeleteRow(token, sheetId, rowNum - 1);
+    setUsers(prev => prev.filter(u => u.email !== email));
+  };
+
   // USER — append
   const appendUser = async (row) => {
     await sheetsAppend(token, 'USERS!A:D', [row]);
@@ -854,7 +914,7 @@ function DataProvider({ user, token, children }) {
   };
 
   return (
-    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, categories, users, loadingData, loadAll, appendActual, updateActual, saveProject, saveSupplier, appendUser, overwriteBidBudget }}>
+    <DataContext.Provider value={{ projects, suppliers, actuals, bids, budgets, categories, users, loadingData, loadAll, appendActual, updateActual, saveProject, saveSupplier, appendUser, overwriteBidBudget, deleteProject, deleteSupplier, deleteUser }}>
       {children}
     </DataContext.Provider>
   );
@@ -886,23 +946,83 @@ function BarChart({ data, labels, datasets }) {
   return <canvas ref={ref} style={{width:'100%',height:'220px'}} />;
 }
 
-function DonutChart({ labels, data, colors }) {
+function DonutChart({ labels, data, colors, showPctLabels = false }) {
   const ref = useRef();
   const chartRef = useRef();
+  const isMobile = window.innerWidth <= 768;
+
   useEffect(() => {
     if (chartRef.current) chartRef.current.destroy();
     if (!ref.current) return;
+    const total = data.reduce((s,v)=>s+v,0);
     chartRef.current = new Chart(ref.current, {
       type: 'doughnut',
       data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1, borderColor: '#162236' }] },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: '65%',
-        plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11, family: "'IBM Plex Sans'" }, boxWidth: 10, padding: 10 } }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtB(ctx.raw)}` } } },
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: {
+          legend: {
+            position: isMobile ? 'bottom' : 'right',
+            labels: {
+              color: '#94a3b8',
+              font: { size: isMobile ? 10 : 11, family: "'IBM Plex Sans'" },
+              boxWidth: 10, padding: isMobile ? 6 : 10,
+              // Hiện % trong legend
+              generateLabels: (chart) => {
+                const ds = chart.data.datasets[0];
+                return chart.data.labels.map((label, i) => {
+                  const val = ds.data[i];
+                  const pct = total > 0 ? Math.round(val/total*100) : 0;
+                  return {
+                    text: isMobile ? `${label} ${pct}%` : `${label}`,
+                    fillStyle: ds.backgroundColor[i],
+                    strokeStyle: ds.backgroundColor[i],
+                    index: i,
+                  };
+                });
+              },
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw;
+                const pct = total > 0 ? Math.round(val/total*100) : 0;
+                return ` ${ctx.label}: ${fmtM(val)} (${pct}%)`;
+              }
+            }
+          },
+          // Plugin hiện % trực tiếp trên slice (desktop)
+          datalabels: false,
+        },
       },
+      // Plugin inline để vẽ % lên slice
+      plugins: [{
+        id: 'pctLabels',
+        afterDraw(chart) {
+          if (isMobile) return; // Mobile dùng tooltip/tap thôi
+          const { ctx, chartArea } = chart;
+          const ds = chart.getDatasetMeta(0);
+          const tot = chart.data.datasets[0].data.reduce((s,v)=>s+v,0);
+          if (!tot) return;
+          ds.data.forEach((arc, i) => {
+            const pct = Math.round(chart.data.datasets[0].data[i]/tot*100);
+            if (pct < 5) return; // Bỏ qua slice quá nhỏ
+            const { x, y } = arc.tooltipPosition();
+            ctx.save();
+            ctx.font = 'bold 11px IBM Plex Sans, sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(pct + '%', x, y);
+            ctx.restore();
+          });
+        }
+      }],
     });
     return () => { if (chartRef.current) chartRef.current.destroy(); };
-  }, [JSON.stringify(labels), JSON.stringify(data)]);
-  return <canvas ref={ref} style={{width:'100%',height:'220px'}} />;
+  }, [JSON.stringify(labels), JSON.stringify(data), JSON.stringify(colors)]);
+  return <canvas ref={ref} style={{width:'100%',height:'100%'}} />;
 }
 
 function LineChart({ labels, datasets }) {
@@ -1696,18 +1816,19 @@ function ActualCostList({ user, token }) {
 // DỰ ÁN
 // ============================================================
 function ProjectsPage({ user }) {
-  const { projects, saveProject } = useData();
+  const { projects, actuals, saveProject, deleteProject } = useData();
   const toast = useToast();
   const emptyForm = { project_id:'', project_name:'', short_name:'', location:'', start_date:'', end_date:'', contract_value:'', status:'Active', pm:'', notes:'' };
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const openAdd = () => { setForm(emptyForm); setEditMode(false); setShowForm(true); };
   const openEdit = (p) => {
-    setForm({ ...p, contract_value: p.contract_value ? fmt(parseFloat(p.contract_value)) : '' });
+    setForm({ ...p, contract_value: p.contract_value ? parseInt(p.contract_value).toLocaleString('vi-VN') : '' });
     setEditMode(true); setShowForm(true);
   };
 
@@ -1722,6 +1843,20 @@ function ProjectsPage({ user }) {
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
   };
 
+  const handleDelete = async (p) => {
+    const hasActuals = actuals.some(a => a.project_id === p.project_id);
+    if (hasActuals) {
+      toast(`"${p.project_name}" có dữ liệu chi phí — không thể xóa. Hãy đổi sang "Đã kết thúc".`, 'error');
+      return;
+    }
+    if (!window.confirm(`Xóa dự án "${p.project_name}"?\nHành động này không thể hoàn tác.`)) return;
+    setDeleting(p.project_id);
+    try {
+      await deleteProject(p.project_id);
+      toast('Đã xóa dự án!', 'success');
+    } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setDeleting(null); }
+  };
+
   return (
     <div>
       <div className="section-header mb-20">
@@ -1733,17 +1868,22 @@ function ProjectsPage({ user }) {
           <table>
             <thead><tr><th>Mã DA</th><th>Tên dự án</th><th>Địa điểm</th><th>Khởi công</th><th>Hoàn thành</th><th className="text-right">Giá trị HĐ</th><th>CHT</th><th>Trạng thái</th><th></th></tr></thead>
             <tbody>
-      {sortProjects(projects).map(p => (
+              {sortProjects(projects).map(p => (
                 <tr key={p.project_id}>
                   <td className="mono text-sm font-bold text-amber">{p.project_id}</td>
                   <td style={{fontWeight:500}}>{p.project_name}</td>
                   <td className="text-muted">{p.location}</td>
                   <td className="mono text-sm">{p.start_date}</td>
                   <td className="mono text-sm">{p.end_date}</td>
-                  <td className="mono text-right">{p.contract_value ? fmtB(parseFloat(p.contract_value)) : '—'}</td>
+                  <td className="mono text-right">{p.contract_value ? fmtM(parseFloat(p.contract_value)) : '—'}</td>
                   <td className="text-sm">{p.pm}</td>
                   <td><span className={`badge ${projectStatusBadge(p.status)}`}>{projectStatusLabel(p.status)}</span></td>
-                  <td>{user.role !== 'viewer' && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(p)}>✏️ Sửa</button>}</td>
+                  <td style={{display:'flex',gap:6,whiteSpace:'nowrap'}}>
+                    {user.role !== 'viewer' && <>
+                      <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(p)}>✏️ Sửa</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(p)} disabled={deleting===p.project_id}>{deleting===p.project_id?'...':'🗑️'}</button>
+                    </>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1759,14 +1899,20 @@ function ProjectsPage({ user }) {
             </div>
             <div className="modal-body">
               <div className="form-grid cols2">
-                <div className="form-group"><label className="form-label required">Mã DA</label><input className="form-input" value={form.project_id} onChange={e=>set('project_id',e.target.value.toUpperCase().replace(/\s/g,''))} placeholder="SYCB13" disabled={editMode} style={editMode?{opacity:0.6}:{}} />{editMode&&<span className="form-hint">Mã DA không thể thay đổi</span>}</div>
+                <div className="form-group"><label className="form-label required">Mã DA</label><input className="form-input" value={form.project_id} onChange={e=>set('project_id',e.target.value.toUpperCase().replace(/\s/g,''))} disabled={editMode} style={editMode?{opacity:0.6}:{}} />{editMode&&<span className="form-hint">Mã DA không thể thay đổi</span>}</div>
                 <div className="form-group"><label className="form-label required">Tên dự án</label><input className="form-input" value={form.project_name} onChange={e=>set('project_name',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Tên viết tắt</label><input className="form-input" value={form.short_name} onChange={e=>set('short_name',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Địa điểm</label><input className="form-input" value={form.location} onChange={e=>set('location',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Ngày khởi công</label><input className="form-input" value={form.start_date} onChange={e=>set('start_date',e.target.value)} placeholder="MM/YYYY" /></div>
                 <div className="form-group"><label className="form-label">Ngày hoàn thành</label><input className="form-input" value={form.end_date} onChange={e=>set('end_date',e.target.value)} placeholder="MM/YYYY" /></div>
-                <div className="form-group"><label className="form-label">Giá trị HĐ (VNĐ)</label><input className="form-input" value={form.contract_value} onChange={e=>set('contract_value',e.target.value)} placeholder="120.000.000.000" /></div>
-                <div className="form-group"><label className="form-label">Trạng thái</label><select className="form-select" value={form.status} onChange={e=>set('status',e.target.value)}><option value="Active">Active</option><option value="Closed">Closed</option><option value="On Hold">On Hold</option></select></div>
+                <div className="form-group"><label className="form-label">Giá trị HĐ (VNĐ)</label><input className="form-input" value={form.contract_value} onChange={e=>set('contract_value',e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Trạng thái</label>
+                  <select className="form-select" value={form.status} onChange={e=>set('status',e.target.value)}>
+                    <option value="Active">Đang hoạt động</option>
+                    <option value="Closed">Đã kết thúc</option>
+                    <option value="On Hold">Tạm dừng</option>
+                  </select>
+                </div>
                 <div className="form-group"><label className="form-label">Chỉ huy trưởng</label><input className="form-input" value={form.pm} onChange={e=>set('pm',e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-input" value={form.notes} onChange={e=>set('notes',e.target.value)} /></div>
               </div>
@@ -1786,7 +1932,7 @@ function ProjectsPage({ user }) {
 // NHÀ CUNG CẤP
 // ============================================================
 function SuppliersPage({ user }) {
-  const { suppliers, saveSupplier, categories } = useData();
+  const { suppliers, actuals, saveSupplier, deleteSupplier, categories } = useData();
   const toast = useToast();
   const emptyForm = { supplier_id:'', supplier_name:'', short_code:'', contact:'', phone:'', email:'', tax_code:'', bank_account:'', bank_name:'', status:'Active', notes:'' };
   const [showForm, setShowForm] = useState(false);
@@ -1794,6 +1940,7 @@ function SuppliersPage({ user }) {
   const [form, setForm] = useState(emptyForm);
   const [selectedCats, setSelectedCats] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const toggleCat = (code) => setSelectedCats(prev => prev.includes(code)?prev.filter(c=>c!==code):[...prev,code]);
 
@@ -1813,6 +1960,20 @@ function SuppliersPage({ user }) {
       toast(editMode ? 'Đã cập nhật NCC!' : 'Đã thêm NCC!', 'success');
       setShowForm(false);
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (s) => {
+    const hasActuals = actuals.some(a => a.supplier_id === s.supplier_id);
+    if (hasActuals) {
+      toast(`"${s.supplier_name}" có dữ liệu chi phí — không thể xóa. Hãy đổi sang Inactive.`, 'error');
+      return;
+    }
+    if (!window.confirm(`Xóa NCC "${s.supplier_name}"?\nHành động này không thể hoàn tác.`)) return;
+    setDeleting(s.supplier_id);
+    try {
+      await deleteSupplier(s.supplier_id);
+      toast('Đã xóa NCC!', 'success');
+    } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setDeleting(null); }
   };
 
   const getCatName = code => categories.find(c=>c.code===code)?.name || code;
@@ -1839,7 +2000,12 @@ function SuppliersPage({ user }) {
                   </td>
                   <td className="text-sm text-muted">{s.bank_name}{s.bank_account?` · ${s.bank_account}`:''}</td>
                   <td><span className={`badge ${s.status==='Active'?'active':'closed'}`}>{s.status}</span></td>
-                  <td>{user.role==='admin' && <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(s)}>✏️ Sửa</button>}</td>
+                  <td style={{display:'flex',gap:6,whiteSpace:'nowrap'}}>
+                    {user.role==='admin' && <>
+                      <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(s)}>✏️ Sửa</button>
+                      <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(s)} disabled={deleting===s.supplier_id}>{deleting===s.supplier_id?'...':'🗑️'}</button>
+                    </>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1912,11 +2078,11 @@ function BidBudgetPage({ user, mode }) {
     setSelectedPid(pid);
     const existing = {};
     source.filter(b=>b.project_id===pid).forEach(b => {
-      existing[b.category_code] = { amount: b[amtField] ? parseInt(b[amtField]).toLocaleString('vi-VN') : '', unit: b.unit||'Hệ', notes: b.notes||'' };
+      existing[b.category_code] = { amount: b[amtField] ? parseInt(b[amtField]).toLocaleString('vi-VN') : '', notes: b.notes||'' };
     });
     const init = {};
     categories.forEach(c => {
-      init[c.code] = existing[c.code] || { amount:'', unit:'Hệ', notes:'' };
+      init[c.code] = existing[c.code] || { amount:'', notes:'' };
     });
     setLines(init);
     setViewMode('form');
@@ -1931,7 +2097,7 @@ function BidBudgetPage({ user, mode }) {
       const rows = categories.map(c => {
         const l = lines[c.code]||{};
         const amt = parseFloat((l.amount||'').replace(/\./g,''))||0;
-        return [selectedPid, c.code, c.name, String(amt), 1, l.unit||'Hệ', String(amt), user.name, todayStr(), l.notes||''];
+        return [selectedPid, c.code, c.name, String(amt), 1, 'Hệ', String(amt), user.name, todayStr(), l.notes||''];
       }).filter(r => parseFloat(r[3]) > 0);
       await overwriteBidBudget(SHEET, selectedPid, rows, isB);
       toast(`Đã lưu ${title} cho ${selectedPid}!`, 'success');
@@ -1996,14 +2162,13 @@ function BidBudgetPage({ user, mode }) {
               <div className="card-header"><span className="card-title">Chi tiết tất cả hạng mục</span></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Công trình</th><th>Hạng mục</th><th className="text-right">Số tiền</th><th>Đơn vị</th><th>Ngày cập nhật</th><th>Người cập nhật</th></tr></thead>
+                  <thead><tr><th>Công trình</th><th>Hạng mục</th><th className="text-right">Số tiền</th><th>Ngày cập nhật</th><th>Người cập nhật</th></tr></thead>
                   <tbody>
                     {source.map((b,i) => (
                       <tr key={i}>
                         <td className="text-sm">{projects.find(p=>p.project_id===b.project_id)?.short_name||b.project_id}</td>
                         <td>{b.category_name || categories.find(c=>c.code===b.category_code)?.name || b.category_code}</td>
-                        <td className="mono text-right font-bold text-amber">{fmt(parseFloat(b[totField]))}</td>
-                        <td className="text-sm text-muted">{b.unit}</td>
+                        <td className="mono text-right font-bold text-amber">{fmtM(parseFloat(b[totField]))}</td>
                         <td className="text-sm text-muted">{b.updated_at}</td>
                         <td className="text-sm text-muted">{b.updated_by}</td>
                       </tr>
@@ -2038,22 +2203,18 @@ function BidBudgetPage({ user, mode }) {
                 <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--amber)',fontWeight:700}}>Tổng: {fmtB(total)}</span>
               </div>
               <div className="card-body">
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,padding:'0 4px'}}>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 2fr',gap:8,marginBottom:8,padding:'0 4px'}}>
                   <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Hạng mục</span>
                   <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Số tiền (VNĐ, chưa VAT)</span>
-                  <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Đơn vị</span>
                   <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>Ghi chú</span>
                 </div>
                 {categories.map(c => {
-                  const l = lines[c.code]||{amount:'',unit:'Hệ',notes:''};
+                  const l = lines[c.code]||{amount:'',notes:''};
                   return (
-                    <div key={c.code} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 2fr',gap:8,marginBottom:8,alignItems:'center'}}>
+                    <div key={c.code} style={{display:'grid',gridTemplateColumns:'2fr 2fr 2fr',gap:8,marginBottom:8,alignItems:'center'}}>
                       <div style={{fontWeight:500,fontSize:13,padding:'9px 0'}}>{c.name}</div>
                       <input className="form-input" value={l.amount} onChange={e=>setLine(c.code,'amount',formatAmt(e.target.value))} placeholder="0" style={{textAlign:'right',fontFamily:'var(--mono)'}} />
-                      <select className="form-select" value={l.unit} onChange={e=>setLine(c.code,'unit',e.target.value)}>
-                        <option>Hệ</option><option>Lần</option><option>Tháng</option><option>m²</option><option>m</option>
-                      </select>
-                      <input className="form-input" value={l.notes} onChange={e=>setLine(c.code,'notes',e.target.value)} placeholder="Ghi chú..." />
+                      <input className="form-input" value={l.notes||''} onChange={e=>setLine(c.code,'notes',e.target.value)} placeholder="Ghi chú..." />
                     </div>
                   );
                 })}
@@ -2081,11 +2242,12 @@ function BidBudgetPage({ user, mode }) {
 // NGƯỜI DÙNG (Admin only)
 // ============================================================
 function UsersPage({ user }) {
-  const { users, appendUser } = useData();
+  const { users, appendUser, deleteUser } = useData();
   const toast = useToast();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ email:'', role:'editor', full_name:'', status:'Active' });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const handleSave = async () => {
@@ -2099,6 +2261,16 @@ function UsersPage({ user }) {
     } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setSaving(false); }
   };
 
+  const handleDelete = async (u) => {
+    if (u.email === user.email) { toast('Không thể xóa tài khoản đang đăng nhập!', 'error'); return; }
+    if (!window.confirm(`Xóa người dùng "${u.full_name || u.email}"?\nHành động này không thể hoàn tác.`)) return;
+    setDeleting(u.email);
+    try {
+      await deleteUser(u.email);
+      toast('Đã xóa người dùng!', 'success');
+    } catch(e) { toast('Lỗi: '+e.message, 'error'); } finally { setDeleting(null); }
+  };
+
   return (
     <div>
       <div className="section-header mb-20">
@@ -2107,12 +2279,12 @@ function UsersPage({ user }) {
       </div>
       <div className="alert info mb-16">
         <span>ℹ</span>
-        <span>Sau khi thêm email vào đây, vào <strong>Google Cloud Console → OAuth consent screen → Test users</strong> để thêm email đó, mới đăng nhập được.</span>
+        <span>App đã publish — mọi email trong danh sách này đều đăng nhập được mà không cần thêm vào Google Console.</span>
       </div>
       <div className="card">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Email</th><th>Họ tên</th><th>Role</th><th>Trạng thái</th></tr></thead>
+            <thead><tr><th>Email</th><th>Họ tên</th><th>Role</th><th>Trạng thái</th><th></th></tr></thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.email}>
@@ -2120,6 +2292,11 @@ function UsersPage({ user }) {
                   <td>{u.full_name}</td>
                   <td><span className={`badge ${u.role==='admin'?'over':u.role==='editor'?'warn':'active'}`}>{u.role}</span></td>
                   <td><span className={`badge ${u.status==='Active'?'active':'closed'}`}>{u.status}</span></td>
+                  <td>
+                    <button className="btn btn-danger btn-sm" onClick={()=>handleDelete(u)} disabled={deleting===u.email||u.email===user.email}>
+                      {deleting===u.email?'...':'🗑️'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
