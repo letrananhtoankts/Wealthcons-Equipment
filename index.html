@@ -471,6 +471,30 @@ const parseRows = (rows, fields) => {
   });
 };
 
+// Parse số tiền từ Google Sheets — xử lý cả 2 format:
+// - Số thuần: "11600000" → 11600000
+// - Có dấu phân cách ngàn VN: "11.600.000" → 11600000
+// - Có dấu phân cách ngàn quốc tế: "11,600,000" → 11600000
+const parseAmt = (v) => {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).trim();
+  // Nếu là số thuần (không có dấu chấm/phẩy) → parse thẳng
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  // Có dấu chấm VN kiểu 11.600.000 (tất cả dấu chấm là phân cách ngàn)
+  // Nhận biết: nếu sau dấu chấm cuối cùng có đúng 3 chữ số → đây là dấu ngàn
+  const dotParts = s.split('.');
+  if (dotParts.length > 1 && dotParts[dotParts.length-1].length === 3 && dotParts.every(p => /^\d+$/.test(p))) {
+    return parseInt(s.replace(/\./g, ''), 10);
+  }
+  // Có dấu phẩy ngàn kiểu 11,600,000
+  if (s.includes(',') && !s.includes('.')) {
+    return parseInt(s.replace(/,/g, ''), 10);
+  }
+  // Fallback: xóa hết ký tự không phải số rồi parse
+  const cleaned = s.replace(/[^\d]/g, '');
+  return cleaned ? parseInt(cleaned, 10) : 0;
+};
+
 // ============================================================
 // TOAST
 // ============================================================
@@ -1082,28 +1106,28 @@ function Dashboard({ user }) {
     ? projects.map(p => p.project_id) // tất cả dự án
     : [projectFilter];
 
-  const totalActual = filtered.reduce((s,a) => s+(parseFloat(a.amount)||0), 0);
-  const totalBid = bids.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_bid)||0), 0);
-  const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseFloat(b.total_budget)||0), 0);
+  const totalActual = filtered.reduce((s,a) => s+(parseAmt(a.amount)||0), 0);
+  const totalBid = bids.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseAmt(b.total_bid)||0), 0);
+  const totalBudget = budgets.filter(b => activePids.includes(b.project_id)).reduce((s,b) => s+(parseAmt(b.total_budget)||0), 0);
   const pct = fmtPct(totalActual, totalBudget);
 
   // Bar chart — chỉ hiện khi chọn "Tất cả"
   const barProjects = sortedProjects.filter(p => p.status === 'Active' || p.status === 'Đang hoạt động');
   const barLabels = barProjects.map(p => p.short_name || p.project_id);
-  const barActual = barProjects.map(p => actuals.filter(a => a.project_id === p.project_id && (yearFilter==='all'||parseMonth(a.month)?.year===parseInt(yearFilter))).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
-  const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0));
-  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0));
+  const barActual = barProjects.map(p => actuals.filter(a => a.project_id === p.project_id && (yearFilter==='all'||parseMonth(a.month)?.year===parseInt(yearFilter))).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
+  const barBudget = barProjects.map(p => budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0));
+  const barBid = barProjects.map(p => bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0));
 
   // Donut
   const COLORS = ['#f59e0b','#60a5fa','#a78bfa','#34d399','#f87171','#fb923c','#818cf8'];
   let donutLabels, donutData;
   if (donutMode === 'cat') {
     donutLabels = categories.map(c => c.name);
-    donutData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutData = categories.map(c => filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
   } else {
     const sids = [...new Set(filtered.map(a=>a.supplier_id))];
     donutLabels = sids.map(sid => suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-    donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+    donutData = sids.map(sid => filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
   }
 
   // Timeline
@@ -1117,7 +1141,7 @@ function Dashboard({ user }) {
     if(yearFilter!=='all'&&p?.year!==parseInt(yearFilter)) return false;
     return true;
   });
-  const timelineActual = displayMonths.map(m=>filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+  const timelineActual = displayMonths.map(m=>filtered.filter(a=>a.month===m).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
   let cum=0;
   const timelineCumul = timelineActual.map(v=>{cum+=v;return cum;});
 
@@ -1126,9 +1150,9 @@ function Dashboard({ user }) {
   const displayedProjects = projectFilter==='all' ? sortedProjects : sortedProjects.filter(p=>p.project_id===projectFilter);
   displayedProjects.forEach(p => {
     categories.forEach(c => {
-      const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
-      const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
-      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+      const catActual = filtered.filter(a=>a.project_id===p.project_id&&a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+      const catBudget = budgets.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
+      const catBid = bids.filter(b=>b.project_id===p.project_id&&b.category_code===c.code).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
       if (catActual>0||catBudget>0||catBid>0) {
         tableRows.push({ project_id:p.project_id, project_name:p.project_name, cat_name:c.name, actual:catActual, budget:catBudget, bid:catBid, pct:fmtPct(catActual,catBudget), status:p.status });
       }
@@ -1197,9 +1221,9 @@ function Dashboard({ user }) {
               </tr></thead>
               <tbody>
                 {sortedProjects.map(p=>{
-                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
-                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
-                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
                   const p2 = fmtPct(pActual,pBudget);
                   if(pActual===0&&pBudget===0&&pBid===0) return null;
                   return (
@@ -1269,7 +1293,7 @@ function Dashboard({ user }) {
             <div className="card-body" style={{height:240}}>
               <DonutChart
                 labels={categories.map(c=>c.name)}
-                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}
                 colors={COLORS}
               />
             </div>
@@ -1280,7 +1304,7 @@ function Dashboard({ user }) {
               {(() => {
                 const sids = [...new Set(filtered.map(a=>a.supplier_id))];
                 const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
                 return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
               })()}
             </div>
@@ -1370,9 +1394,9 @@ function Dashboard({ user }) {
               </tr></thead>
               <tbody>
                 {sortedProjects.map(p=>{
-                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
-                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_budget)||0),0);
-                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseFloat(b.total_bid)||0),0);
+                  const pActual = filtered.filter(a=>a.project_id===p.project_id).reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
+                  const pBudget = budgets.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_budget)||0),0);
+                  const pBid = bids.filter(b=>b.project_id===p.project_id).reduce((s,b)=>s+(parseAmt(b.total_bid)||0),0);
                   const p2 = fmtPct(pActual,pBudget);
                   if(pActual===0&&pBudget===0&&pBid===0) return null;
                   return (
@@ -1403,7 +1427,7 @@ function Dashboard({ user }) {
             <div style={{height:160}}>
               <DonutChart
                 labels={categories.map(c=>c.name)}
-                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}
+                data={categories.map(c=>filtered.filter(a=>a.category_code===c.code).reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}
                 colors={COLORS}
               />
             </div>
@@ -1415,7 +1439,7 @@ function Dashboard({ user }) {
               {(() => {
                 const sids = [...new Set(filtered.map(a=>a.supplier_id))].slice(0,6);
                 const nccLabels = sids.map(sid=>suppliers?.find(s=>s.supplier_id===sid)?.short_code||sid);
-                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseFloat(a.amount)||0),0));
+                const nccData = sids.map(sid=>filtered.filter(a=>a.supplier_id===sid).reduce((s,a)=>s+(parseAmt(a.amount)||0),0));
                 return <DonutChart labels={nccLabels} data={nccData} colors={COLORS}/>;
               })()}
             </div>
@@ -1492,7 +1516,7 @@ function ActualCostForm({ user, token, onClose, editData }) {
   });
   const [lines, setLines] = useState(
     isEdit
-      ? [{ category_code: editData.category_code, amount: editData.amount ? parseInt(editData.amount).toLocaleString('vi-VN') : '', notes: editData.notes||'' }]
+      ? [{ category_code: editData.category_code, amount: editData.amount ? parseAmt(editData.amount).toLocaleString('vi-VN') : '', notes: editData.notes||'' }]
       : [{ category_code:'', amount:'', notes:'' }]
   );
   const [saving, setSaving] = useState(false);
@@ -1743,7 +1767,7 @@ function ActualCostList({ user, token }) {
 
   const pages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
-  const total = filtered.reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+  const total = filtered.reduce((s,a)=>s+(parseAmt(a.amount)||0),0);
 
   const getProjectName = id => projects.find(p=>p.project_id===id)?.short_name || id;
   const getSupplierName = id => suppliers.find(s=>s.supplier_id===id)?.short_code || id;
@@ -1757,7 +1781,7 @@ function ActualCostList({ user, token }) {
       <div className="section-header mb-20">
         <div>
           <div className="section-title">Chi Phí Thực Tế</div>
-          <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseFloat(a.amount)||0),0))}</div>
+          <div className="section-sub">{actuals.length} bản ghi · Tổng: {fmtB(actuals.reduce((s,a)=>s+(parseAmt(a.amount)||0),0))}</div>
         </div>
         {(user.role === 'admin' || user.role === 'editor') && (
           <button className="btn btn-primary" onClick={openAdd}>+ Nhập Chi Phí Mới</button>
@@ -1792,7 +1816,6 @@ function ActualCostList({ user, token }) {
         <div className="table-wrap">
           <table>
             <thead><tr>
-              <th>Mã CT</th>
               <th>Công trình</th>
               <th>NCC</th>
               <th>Hạng mục</th>
@@ -1805,15 +1828,14 @@ function ActualCostList({ user, token }) {
               <th></th>
             </tr></thead>
             <tbody>
-              {paged.length === 0 && <tr><td colSpan={11} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
+              {paged.length === 0 && <tr><td colSpan={10} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Không có dữ liệu</td></tr>}
               {paged.map(a => (
                 <tr key={a.cost_id}>
-                  <td className="mono text-sm text-muted">{a.cost_id}</td>
                   <td>{getProjectName(a.project_id)}</td>
                   <td className="text-sm">{getSupplierName(a.supplier_id)}</td>
                   <td><span className="badge active">{getCatName(a.category_code)}</span></td>
                   <td className="mono text-sm">{a.month}</td>
-                  <td className="mono text-right font-bold text-amber">{fmt(parseFloat(a.amount))}</td>
+                  <td className="mono text-right font-bold text-amber">{fmt(parseAmt(a.amount))}</td>
                   <td className="mono text-sm text-muted">{a.bill_ref}</td>
                   <td>{a.bill_pdf_url ? <a href={a.bill_pdf_url} target="_blank" rel="noopener noreferrer" style={{color:'var(--amber)',fontSize:11}}>📄 Xem</a> : <span className="text-muted text-sm">—</span>}</td>
                   <td className="text-sm text-muted">{a.input_date}</td>
@@ -2399,7 +2421,7 @@ function MobileActualList() {
               <div style={{fontWeight:600,fontSize:13}}>{getProjectName(a.project_id)}</div>
               <div className="mobile-cost-meta">{getSupplierName(a.supplier_id)} · {a.month}</div>
             </div>
-            <div className="mobile-cost-amount">{fmtB(parseFloat(a.amount))}</div>
+            <div className="mobile-cost-amount">{fmtB(parseAmt(a.amount))}</div>
           </div>
           <div className="mobile-cost-tags">
             <span className="badge active">{getCatName(a.category_code)}</span>
