@@ -458,6 +458,11 @@ const getSheetId = async (token, sheetName) => {
   return sheet?.properties?.sheetId ?? null;
 };
 const driveUpload = async (token, file, fileName) => {
+  // Kiểm tra token còn hạn không
+  const exp = parseInt(localStorage.getItem('wc_token_exp') || '0');
+  if (!token || exp < Date.now()) {
+    throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại để upload PDF.');
+  }
   // Bước 1: Tạo metadata
   const metadata = {
     name: fileName,
