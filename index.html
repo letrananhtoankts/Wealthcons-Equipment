@@ -1679,6 +1679,20 @@ function ActualCostForm({ user, token, onClose, editData }) {
   const removeLine = (i) => setLines(ls=>ls.filter((_,j)=>j!==i));
   const formatAmt = v => { const n=v.replace(/\D/g,''); return n?parseInt(n).toLocaleString('vi-VN'):''; };
 
+  // Auto-generate bill_ref khi đủ project + supplier + month (chỉ khi nhập mới)
+  const [billRefManual, setBillRefManual] = useState(isEdit); // nếu edit thì giữ tay
+  useEffect(() => {
+    if (isEdit || billRefManual) return;
+    const { project_id, supplier_id, month } = form;
+    if (project_id && supplier_id && month) {
+      // Format: BILL-SYCAMOREB13-TRUONGTHINH-04/2026
+      const auto = `BILL-${project_id}-${supplier_id}-${month}`;
+      set('bill_ref', auto);
+    } else {
+      set('bill_ref', '');
+    }
+  }, [form.project_id, form.supplier_id, form.month, billRefManual, isEdit]);
+
   // Upload PDF lên Drive
   const handlePdfUpload = async (file) => {
     if (!file || file.type !== 'application/pdf') { toast('Chỉ chấp nhận file PDF', 'error'); return; }
@@ -1788,7 +1802,26 @@ function ActualCostForm({ user, token, onClose, editData }) {
             </div>
             <div className="form-group">
               <label className="form-label required">Số chứng từ</label>
-              <input className={`form-input ${errors.bill_ref?'error':''}`} value={form.bill_ref} onChange={e=>set('bill_ref',e.target.value)} placeholder="BILL-TT-001" />
+              <div style={{position:'relative'}}>
+                <input
+                  className={`form-input ${errors.bill_ref?'error':''}`}
+                  value={form.bill_ref}
+                  onChange={e=>{ setBillRefManual(true); set('bill_ref',e.target.value); }}
+                  placeholder={form.project_id&&form.supplier_id&&form.month ? 'Đang tạo tự động...' : 'Chọn đủ Dự án + NCC + Tháng'}
+                  style={{paddingRight: !isEdit && !billRefManual && form.bill_ref ? 80 : 12}}
+                  readOnly={!isEdit && !billRefManual && !!form.bill_ref}
+                />
+                {!isEdit && billRefManual && (
+                  <button type="button"
+                    onClick={()=>setBillRefManual(false)}
+                    style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:10,color:'var(--amber)',background:'none',border:'none',cursor:'pointer',fontWeight:600}}>
+                    ↺ Auto
+                  </button>
+                )}
+                {!isEdit && !billRefManual && form.bill_ref && (
+                  <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:10,color:'var(--green)',fontWeight:600}}>✓ Tự động</span>
+                )}
+              </div>
               {errors.bill_ref && <span className="form-error">{errors.bill_ref}</span>}
             </div>
           </div>
